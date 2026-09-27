@@ -55,10 +55,11 @@ data class ProfileDiagnostics(
 
 data class IsolationCriterionResult(
     val id: Int,
-    val category: String, // "ISOLAMENTO NATIVO DO WEBVIEW", "ISOLAMENTO DO ROOM", "PERSISTÊNCIA", "AUTENTICAÇÃO", "SERVICE WORKER", "CACHE", "BRIDGE", "NAVEGAÇÃO", "RECUPERAÇÃO APÓS REINICIALIZAÇÃO"
+    val category: String,
     val title: String,
     val description: String,
     val passed: Boolean,
+    val status: String = if (passed) "PASS" else "FAIL", // "PASS", "FAIL", "UNSUPPORTED", "NOT_TESTED"
     val details: String,
     val evidence: String = ""
 )

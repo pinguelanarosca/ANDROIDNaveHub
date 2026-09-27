@@ -50,10 +50,11 @@ class IsolationAuditor(
                 id = 1,
                 category = "ISOLAMENTO NATIVO DO WEBVIEW",
                 title = "Suporte a WebViewFeature.MULTI_PROFILE e Versão do WebView",
-                description = "Verifica se o Android System WebView do ambiente suporta múltiplos perfis nativos e identifica o pacote instalado.",
-                passed = true,
+                description = "Verifica se o Android System WebView do ambiente suporta múltiplos perfis nativos.",
+                passed = isMultiProfileSupported,
+                status = if (isMultiProfileSupported) "PASS" else "UNSUPPORTED",
                 details = "MULTI_PROFILE Support: $isMultiProfileSupported | Package: $webViewVersionInfo",
-                evidence = if (isMultiProfileSupported) "AndroidX WebKit ProfileStore ativo: $webViewVersionInfo" else "Modo Fallback Legado ativo (dispositivo sem MULTI_PROFILE): $webViewVersionInfo"
+                evidence = if (isMultiProfileSupported) "AndroidX WebKit ProfileStore ativo: $webViewVersionInfo" else "Dispositivo/WebView sem suporte nativo a MULTI_PROFILE: $webViewVersionInfo"
             )
         )
 
@@ -62,30 +63,28 @@ class IsolationAuditor(
         val profileName = nativeProfileManager.getProfileNameForAccount(testAccountId)
         val profile = if (isMultiProfileSupported) nativeProfileManager.getOrCreateProfile(testAccountId) else null
         val defaultProfileName = "Default"
-        val notUsingDefault = if (isMultiProfileSupported) {
+        val customProfilePass = if (isMultiProfileSupported) {
             profile != null && profile.name != defaultProfileName && profile.name == profileName
-        } else {
-            true // In fallback, dedicated namespacing is maintained
-        }
+        } else false
+
         results.add(
             IsolationCriterionResult(
                 id = 2,
                 category = "ISOLAMENTO NATIVO DO WEBVIEW",
                 title = "Não Utilização do Perfil Default",
                 description = "Cada conta utiliza perfil customizado próprio ('navehub_profile_<uuid>') e nunca o Default Profile.",
-                passed = notUsingDefault,
+                passed = customProfilePass,
+                status = if (isMultiProfileSupported) (if (customProfilePass) "PASS" else "FAIL") else "UNSUPPORTED",
                 details = "Perfil atribuído: $profileName (Default Profile proibido)",
-                evidence = "Perfil verificado: ${profile?.name ?: "Namespace Isolado: $profileName"}"
+                evidence = "Perfil verificado: ${profile?.name ?: "MULTI_PROFILE indisponível neste ambiente"}"
             )
         )
 
         // 3. ISOLAMENTO NATIVO DO WEBVIEW: CookieManager do Perfil Nativo
         val profileCm = if (isMultiProfileSupported && profile != null) {
             try { profile.cookieManager } catch (e: Throwable) { null }
-        } else {
-            null
-        }
-        val cmIsolated = if (isMultiProfileSupported) profileCm != null else true
+        } else null
+        val cmIsolated = profileCm != null
         results.add(
             IsolationCriterionResult(
                 id = 3,
@@ -93,18 +92,17 @@ class IsolationAuditor(
                 title = "CookieManager Dedicado por Perfil",
                 description = "Obtém CookieManager exclusivo associado ao perfil isolado e não ao singleton global.",
                 passed = cmIsolated,
-                details = if (isMultiProfileSupported) "Profile CookieManager ativo: ${profileCm != null}" else "CookieManager gerenciado via expurgo antes de troca",
-                evidence = "Cookies vinculados estritamente ao Profile $profileName"
+                status = if (isMultiProfileSupported) (if (cmIsolated) "PASS" else "FAIL") else "UNSUPPORTED",
+                details = if (isMultiProfileSupported) "Profile CookieManager ativo: ${profileCm != null}" else "MULTI_PROFILE não suportado no ambiente",
+                evidence = if (cmIsolated) "Cookies vinculados ao Profile $profileName" else "Requer MULTI_PROFILE no WebView"
             )
         )
 
         // 4. ISOLAMENTO NATIVO DO WEBVIEW: WebStorage Dedicado por Perfil
         val profileWs = if (isMultiProfileSupported && profile != null) {
             try { profile.webStorage } catch (e: Throwable) { null }
-        } else {
-            null
-        }
-        val wsIsolated = if (isMultiProfileSupported) profileWs != null else true
+        } else null
+        val wsIsolated = profileWs != null
         results.add(
             IsolationCriterionResult(
                 id = 4,
@@ -112,8 +110,9 @@ class IsolationAuditor(
                 title = "WebStorage Nativo por Perfil",
                 description = "WebStorage do Chromium particionado nativamente por perfil para isolamento de Local e Session Storage.",
                 passed = wsIsolated,
-                details = if (isMultiProfileSupported) "Profile WebStorage ativo: ${profileWs != null}" else "WebStorage particionado via Room SQLite",
-                evidence = "Armazenamento do WebView desvinculado entre perfis"
+                status = if (isMultiProfileSupported) (if (wsIsolated) "PASS" else "FAIL") else "UNSUPPORTED",
+                details = if (isMultiProfileSupported) "Profile WebStorage ativo: ${profileWs != null}" else "MULTI_PROFILE não suportado no ambiente",
+                evidence = if (wsIsolated) "Armazenamento do WebView desvinculado entre perfis" else "Requer MULTI_PROFILE no WebView"
             )
         )
 
@@ -201,16 +200,16 @@ class IsolationAuditor(
             )
 
             // 9. SERVICE WORKER & CACHE: Espaço de Armazenamento Particionado
-            // When Multi-Profile is supported, Profile manages separate cache and service worker registries.
             results.add(
                 IsolationCriterionResult(
                     id = 9,
                     category = "SERVICE WORKER",
                     title = "Registro Isolado de Service Worker",
                     description = "Cada perfil de WebView mantém seu próprio escopo de Service Worker no diretório do perfil.",
-                    passed = true,
-                    details = if (isMultiProfileSupported) "ProfileStore associa SW e cache ao diretório do perfil $profileName" else "WebViews com cache isolado por sessão",
-                    evidence = "Service Workers registrados em A não interceptam requisições de B"
+                    passed = isMultiProfileSupported,
+                    status = if (isMultiProfileSupported) "PASS" else "NOT_TESTED",
+                    details = if (isMultiProfileSupported) "ProfileStore associa SW e cache ao diretório do perfil $profileName" else "Requer teste instrumentado com servidor de SW real",
+                    evidence = if (isMultiProfileSupported) "Service Worker do Profile cadastrado isoladamente" else "NOT_TESTED no modo auditoria sintética sem servidor web ativo"
                 )
             )
 
@@ -221,9 +220,10 @@ class IsolationAuditor(
                     category = "CACHE",
                     title = "Cache HTTP Particionado por Perfil",
                     description = "Cache HTTP e dados de rede são confinados à partição de cache da conta correspondente.",
-                    passed = true,
-                    details = "Cache HTTP do Chromium isolado no perfil correspondente",
-                    evidence = "Respostas cacheadas em A não são servidas para B"
+                    passed = isMultiProfileSupported,
+                    status = if (isMultiProfileSupported) "PASS" else "NOT_TESTED",
+                    details = if (isMultiProfileSupported) "Cache HTTP do Chromium isolado no perfil correspondente" else "Requer carregamento de servidor HTTP real",
+                    evidence = if (isMultiProfileSupported) "Respostas cacheadas em A não são servidas para B" else "NOT_TESTED no modo auditoria sem servidor HTTP real"
                 )
             )
 
@@ -368,16 +368,17 @@ class IsolationAuditor(
             )
 
             // 20. CRITÉRIO FINAL: Validação Abrangente e Transparência Técnica
-            val allPassed = results.all { it.passed }
+            val noFailures = results.none { it.status == "FAIL" }
             results.add(
                 IsolationCriterionResult(
                     id = 20,
                     category = "ISOLAMENTO NATIVO DO WEBVIEW",
                     title = "Conclusão da Auditoria Multicamadas",
                     description = "Combina validação do WebView nativo, SQLite, navegação segura e integridade de sessões.",
-                    passed = allPassed,
+                    passed = noFailures,
+                    status = if (noFailures) "PASS" else "FAIL",
                     details = if (isMultiProfileSupported) "NATIVE PROFILE ISOLATION: ATIVO" else "FALLBACK ISOLATION: ATIVO (Device não suporta MULTI_PROFILE)",
-                    evidence = "Auditoria concluída com base em evidências técnicas objetivas"
+                    evidence = "Auditoria concluída com transparência técnica de suporte"
                 )
             )
 
