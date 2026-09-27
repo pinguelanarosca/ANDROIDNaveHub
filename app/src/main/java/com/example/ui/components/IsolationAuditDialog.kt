@@ -1,0 +1,304 @@
+package com.example.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.domain.model.IsolationAuditReport
+import com.example.domain.model.IsolationCriterionResult
+import com.example.ui.theme.CyberBorder
+import com.example.ui.theme.CyberSurface
+import com.example.ui.theme.CyberSurfaceVariant
+import com.example.ui.theme.CyanNeon
+import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.SuccessGreen
+
+@Composable
+fun IsolationAuditDialog(
+    report: IsolationAuditReport?,
+    isRunning: Boolean,
+    onRunAuditClick: () -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, CyberBorder, RoundedCornerShape(16.dp))
+                .testTag("isolation_audit_dialog"),
+            color = Color(0xFF090D16)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "Segurança",
+                            tint = CyanNeon,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Auditoria de Isolamento",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Verificação dos 20 Critérios Objetivos",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.testTag("close_audit_dialog_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Fechar",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Status Banner Card
+                val passedCount = report?.passedCount ?: 0
+                val totalCount = report?.totalCount ?: 20
+                val isAllPassed = report?.allPassed == true
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isAllPassed) SuccessGreen.copy(alpha = 0.15f)
+                            else if (report != null) ErrorRed.copy(alpha = 0.15f)
+                            else Color(0xFF1E293B)
+                        )
+                        .border(
+                            1.dp,
+                            if (isAllPassed) SuccessGreen else if (report != null) ErrorRed else CyberBorder,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = if (report == null) "Auditoria Pendente de Execução"
+                                else if (isAllPassed) "ISOLAMENTO 100% APROVADO"
+                                else "ISOLAMENTO REPROVADO",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isAllPassed) SuccessGreen else if (report != null) ErrorRed else CyanNeon
+                            )
+                            Text(
+                                text = if (report != null) "Critérios aprovados: $passedCount / $totalCount"
+                                else "Execute os testes para verificar o isolamento real entre contas",
+                                fontSize = 12.sp,
+                                color = Color(0xFFCBD5E1)
+                            )
+                        }
+
+                        Button(
+                            onClick = onRunAuditClick,
+                            enabled = !isRunning,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyanNeon,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.testTag("run_audit_test_button")
+                        ) {
+                            if (isRunning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Executar",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Executar",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // List of Criteria
+                if (report == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Toque em 'Executar' para iniciar a validação automatizada dos 20 critérios de isolamento.",
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(24.dp)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(report.criteriaResults) { result ->
+                            CriterionItemCard(result)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CriterionItemCard(result: IsolationCriterionResult) {
+    val statusColor = if (result.passed) SuccessGreen else ErrorRed
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF131B2E))
+            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+            .padding(10.dp)
+            .testTag("criterion_result_${result.id}")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = if (result.passed) Icons.Default.CheckCircle else Icons.Default.Error,
+                contentDescription = if (result.passed) "Aprovado" else "Reprovado",
+                tint = statusColor,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${result.id}. ${result.title}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(statusColor.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (result.passed) "PASS" else "FAIL",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = statusColor
+                        )
+                    }
+                }
+
+                Text(
+                    text = result.description,
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                Text(
+                    text = result.details,
+                    fontSize = 10.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = Color(0xFF38BDF8),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
+}

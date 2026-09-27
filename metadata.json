@@ -1,0 +1,6 @@
+{
+  "name": "NaveHub",
+  "description": "Hub visual de gerenciamento multi-plataforma e multi-contas com isolamento total de navegação, sessões e cookies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
