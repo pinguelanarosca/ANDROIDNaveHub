@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -71,14 +70,11 @@ fun NaveWebViewContainer(
     onUrlChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     var currentUrlInput by remember(account.id, isSandboxMode) {
         mutableStateOf(if (isSandboxMode) "navehub://sandbox/${platform.id}/${account.name}" else account.currentUrl)
     }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var loadProgress by remember { mutableFloatStateOf(0f) }
 
     // Retrieve or create the dedicated WebView instance from pool
     val webView = remember(account.id) {

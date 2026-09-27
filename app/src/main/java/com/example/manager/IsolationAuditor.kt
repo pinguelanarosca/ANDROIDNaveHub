@@ -50,8 +50,9 @@ class IsolationAuditor(
         val testAccountId = UUID.randomUUID().toString()
         val profileName = nativeProfileManager.getProfileNameForAccount(testAccountId)
         val profile = if (isMultiProfileSupported) nativeProfileManager.getOrCreateProfile(testAccountId) else null
+        val defaultProfileName = "Default"
         val notUsingDefault = if (isMultiProfileSupported) {
-            profile != null && profile.name != Profile.DEFAULT_PROFILE && profile.name == profileName
+            profile != null && profile.name != defaultProfileName && profile.name == profileName
         } else {
             true // In fallback, dedicated namespacing is maintained
         }
