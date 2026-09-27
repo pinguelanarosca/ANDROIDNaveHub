@@ -7,7 +7,9 @@ import com.example.data.local.NaveHubDatabase
 import com.example.data.repository.NaveHubRepository
 import com.example.domain.model.CookieItem
 import com.example.domain.model.StorageType
+import com.example.manager.AccountWebViewPool
 import com.example.manager.IsolationAuditor
+import com.example.manager.NativeProfileManager
 import com.example.manager.SessionIsolationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +34,9 @@ class NaveHubIsolationRobolectricTest {
 
     private lateinit var database: NaveHubDatabase
     private lateinit var repository: NaveHubRepository
+    private lateinit var nativeProfileManager: NativeProfileManager
     private lateinit var isolationManager: SessionIsolationManager
+    private lateinit var webViewPool: AccountWebViewPool
     private lateinit var auditor: IsolationAuditor
     private lateinit var context: Context
 
@@ -44,15 +48,17 @@ class NaveHubIsolationRobolectricTest {
             .build()
         repository = NaveHubRepository(database)
         val scope = CoroutineScope(Dispatchers.IO)
-        isolationManager = SessionIsolationManager(context, repository, scope)
-        auditor = IsolationAuditor(repository, isolationManager)
+        nativeProfileManager = NativeProfileManager(context)
+        isolationManager = SessionIsolationManager(context, repository, scope, nativeProfileManager)
+        webViewPool = AccountWebViewPool(context, nativeProfileManager, isolationManager)
+        auditor = IsolationAuditor(context, repository, isolationManager, nativeProfileManager)
 
-        // Seed initial platforms
         NaveHubDatabase.populateInitialData(database)
     }
 
     @After
     fun tearDown() {
+        webViewPool.releaseAll()
         database.close()
     }
 
@@ -167,7 +173,6 @@ class NaveHubIsolationRobolectricTest {
         repository.setStorageItem(acc1.id, StorageType.LOCAL, "secret", "LEAK_CHECK")
         repository.saveCookie(CookieItem(acc1.id, "8u.com", "cookie1", "LEAK_COOKIE"))
 
-        // Create new Account 2
         val acc2 = repository.createAccount("8u", "Conta 2")
         val acc2Storage = repository.getAllStorageForAccountSync(acc2.id)
         val acc2Cookies = repository.getCookiesForAccountSync(acc2.id)
@@ -212,9 +217,17 @@ class NaveHubIsolationRobolectricTest {
         assertEquals(20, report.passedCount)
         assertEquals(20, report.totalCount)
 
-        // Verify each individual criterion
         report.criteriaResults.forEach { criterion ->
             assertTrue("Criterion ${criterion.id}: ${criterion.title} failed: ${criterion.details}", criterion.passed)
         }
+    }
+
+    @Test
+    fun test11_ProfileDiagnosticsNotDefault() {
+        val testAccId = UUID.randomUUID().toString()
+        val diag = nativeProfileManager.getDiagnostics(testAccId, null)
+        assertNotNull(diag)
+        assertEquals("navehub_profile_$testAccId", diag.profileName)
+        assertFalse("Profile name must never be default", diag.profileName.contains("default"))
     }
 }

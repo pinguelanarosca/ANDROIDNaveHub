@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,7 +27,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,9 +42,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.domain.model.IsolationAuditReport
 import com.example.domain.model.IsolationCriterionResult
+import com.example.domain.model.ProfileDiagnostics
 import com.example.ui.theme.CyberBorder
-import com.example.ui.theme.CyberSurface
-import com.example.ui.theme.CyberSurfaceVariant
 import com.example.ui.theme.CyanNeon
 import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.SuccessGreen
@@ -54,6 +51,7 @@ import com.example.ui.theme.SuccessGreen
 @Composable
 fun IsolationAuditDialog(
     report: IsolationAuditReport?,
+    diagnostics: ProfileDiagnostics?,
     isRunning: Boolean,
     onRunAuditClick: () -> Unit,
     onDismissRequest: () -> Unit
@@ -94,14 +92,14 @@ fun IsolationAuditDialog(
                         )
                         Column {
                             Text(
-                                text = "Auditoria de Isolamento",
-                                fontSize = 18.sp,
+                                text = "Auditoria Técnica do NaveHub",
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                             Text(
-                                text = "Verificação dos 20 Critérios Objetivos",
-                                fontSize = 12.sp,
+                                text = "Isolamento Nativo por Perfil & Validação Multicamadas",
+                                fontSize = 11.sp,
                                 color = Color(0xFF94A3B8)
                             )
                         }
@@ -119,7 +117,52 @@ fun IsolationAuditDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Profile Diagnostics Pill Card (BLOQUEIO 17)
+                if (diagnostics != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF131B2E))
+                            .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                            .testTag("profile_diagnostics_card")
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "DETECÇÃO TÉCNICA DE PERFIL ATIVO",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = CyanNeon
+                                )
+                                Text(
+                                    text = if (diagnostics.isMultiProfileSupported) "MULTI_PROFILE: SUPORTADO" else "MULTI_PROFILE: NÃO SUPORTADO (FALLBACK)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (diagnostics.isMultiProfileSupported) SuccessGreen else Color(0xFFFFAB00)
+                                )
+                            }
+                            Text(
+                                text = "Perfil: ${diagnostics.profileName} | Instância: ${diagnostics.webViewId}",
+                                fontSize = 10.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = Color(0xFFCBD5E1)
+                            )
+                            Text(
+                                text = "Status: ${diagnostics.profileStatus} (Default Profile Proibido)",
+                                fontSize = 10.sp,
+                                color = if (diagnostics.profileStatus.contains("FAIL")) ErrorRed else Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 // Status Banner Card
                 val passedCount = report?.passedCount ?: 0
@@ -129,7 +172,7 @@ fun IsolationAuditDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             if (isAllPassed) SuccessGreen.copy(alpha = 0.15f)
                             else if (report != null) ErrorRed.copy(alpha = 0.15f)
@@ -138,9 +181,9 @@ fun IsolationAuditDialog(
                         .border(
                             1.dp,
                             if (isAllPassed) SuccessGreen else if (report != null) ErrorRed else CyberBorder,
-                            RoundedCornerShape(12.dp)
+                            RoundedCornerShape(10.dp)
                         )
-                        .padding(12.dp)
+                        .padding(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -150,16 +193,16 @@ fun IsolationAuditDialog(
                         Column {
                             Text(
                                 text = if (report == null) "Auditoria Pendente de Execução"
-                                else if (isAllPassed) "ISOLAMENTO 100% APROVADO"
-                                else "ISOLAMENTO REPROVADO",
-                                fontSize = 14.sp,
+                                else if (isAllPassed) "ISOLAMENTO VALIDADO (TODOS PASS)"
+                                else "FALHAS ENCONTRADAS",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 color = if (isAllPassed) SuccessGreen else if (report != null) ErrorRed else CyanNeon
                             )
                             Text(
-                                text = if (report != null) "Critérios aprovados: $passedCount / $totalCount"
-                                else "Execute os testes para verificar o isolamento real entre contas",
-                                fontSize = 12.sp,
+                                text = if (report != null) "Aprovados: $passedCount / $totalCount critérios"
+                                else "Execute para auditar WebKit Profiles, Room, Cache, SW e Auth",
+                                fontSize = 11.sp,
                                 color = Color(0xFFCBD5E1)
                             )
                         }
@@ -197,7 +240,7 @@ fun IsolationAuditDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // List of Criteria
                 if (report == null) {
@@ -208,9 +251,9 @@ fun IsolationAuditDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Toque em 'Executar' para iniciar a validação automatizada dos 20 critérios de isolamento.",
+                            text = "Toque em 'Executar' para auditar os testes de isolamento nativo por perfil e persistência.",
                             color = Color(0xFF64748B),
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             modifier = Modifier.padding(24.dp)
                         )
                     }
@@ -262,12 +305,20 @@ private fun CriterionItemCard(result: IsolationCriterionResult) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "${result.id}. ${result.title}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "[${result.category}]",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanNeon
+                        )
+                        Text(
+                            text = "${result.id}. ${result.title}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
 
                     Box(
                         modifier = Modifier
@@ -296,8 +347,17 @@ private fun CriterionItemCard(result: IsolationCriterionResult) {
                     fontSize = 10.sp,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                     color = Color(0xFF38BDF8),
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 3.dp)
                 )
+
+                if (result.evidence.isNotBlank()) {
+                    Text(
+                        text = "Evidência: ${result.evidence}",
+                        fontSize = 10.sp,
+                        color = Color(0xFFCBD5E1),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
         }
     }

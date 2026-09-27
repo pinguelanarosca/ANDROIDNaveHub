@@ -1,8 +1,6 @@
 package com.example.manager
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebStorage
@@ -21,16 +19,16 @@ import java.net.URI
 class SessionIsolationManager(
     private val context: Context,
     private val repository: NaveHubRepository,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    val nativeProfileManager: NativeProfileManager = NativeProfileManager(context)
 ) {
-    private val cookieManager: CookieManager? = try {
+    private val defaultCookieManager: CookieManager? = try {
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
         }
     } catch (e: Throwable) {
         null
     }
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
     var activeAccountId: String? = null
@@ -45,11 +43,38 @@ class SessionIsolationManager(
         private set
 
     /**
+     * Resolves the appropriate CookieManager for an account.
+     * Uses the native Profile's CookieManager if MULTI_PROFILE is supported,
+     * otherwise falls back to the system default singleton.
+     */
+    fun getEffectiveCookieManager(accountId: String): CookieManager? {
+        if (nativeProfileManager.isMultiProfileSupported) {
+            val profileCm = nativeProfileManager.getCookieManagerForAccount(accountId)
+            if (profileCm != null) return profileCm
+        }
+        return defaultCookieManager
+    }
+
+    /**
+     * Resolves the appropriate WebStorage for an account.
+     */
+    fun getEffectiveWebStorage(accountId: String): WebStorage? {
+        if (nativeProfileManager.isMultiProfileSupported) {
+            val profileWs = nativeProfileManager.getWebStorageForAccount(accountId)
+            if (profileWs != null) return profileWs
+        }
+        return try {
+            WebStorage.getInstance()
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    /**
      * Prepares the isolated environment for a target account.
-     * 1. Captures outgoing account's cookies & state (if an account was active).
-     * 2. Purges the global CookieManager and WebStorage.
-     * 3. Injects target account's saved cookies into CookieManager.
-     * 4. Updates active pointers.
+     * In Native Multi-Profile mode, each account's WebView is bound to its own Profile,
+     * so cross-talk is prevented at the Chromium engine level.
+     * In legacy fallback mode, purges and restores cookies.
      */
     suspend fun switchAccountEnvironment(
         targetAccountId: String,
@@ -57,31 +82,32 @@ class SessionIsolationManager(
         targetUrl: String
     ) = withContext(Dispatchers.IO) {
         val outgoingAccountId = activeAccountId
-        if (outgoingAccountId != null && outgoingAccountId != targetAccountId) {
-            // Snapshot and save cookies from current session
-            persistCurrentCookiesForAccount(outgoingAccountId, activeUrl)
-        }
 
-        // Wipe global volatile cookies & WebStorage
-        try {
-            cookieManager?.removeAllCookies(null)
-            cookieManager?.flush()
-            WebStorage.getInstance().deleteAllData()
-        } catch (e: Throwable) {
-            // In unit tests or headless contexts, webkit singleton may throw
-        }
-
-        // Restore target account's cookies
-        val targetCookies = repository.getCookiesForAccountSync(targetAccountId)
-        try {
-            targetCookies.forEach { cookie ->
-                val cookieStr = buildCookieString(cookie)
-                val domainUrl = if (cookie.domain.startsWith("http")) cookie.domain else "https://${cookie.domain}"
-                cookieManager?.setCookie(domainUrl, cookieStr)
+        if (!nativeProfileManager.isMultiProfileSupported) {
+            // Legacy fallback switching
+            if (outgoingAccountId != null && outgoingAccountId != targetAccountId) {
+                persistCurrentCookiesForAccount(outgoingAccountId, activeUrl)
             }
-            cookieManager?.flush()
-        } catch (e: Throwable) {
-            // Ignore in headless test environments
+
+            try {
+                defaultCookieManager?.removeAllCookies(null)
+                defaultCookieManager?.flush()
+                WebStorage.getInstance().deleteAllData()
+            } catch (e: Throwable) {
+                // Ignore in headless test contexts
+            }
+
+            val targetCookies = repository.getCookiesForAccountSync(targetAccountId)
+            try {
+                targetCookies.forEach { cookie ->
+                    val cookieStr = buildCookieString(cookie)
+                    val domainUrl = if (cookie.domain.startsWith("http")) cookie.domain else "https://${cookie.domain}"
+                    defaultCookieManager?.setCookie(domainUrl, cookieStr)
+                }
+                defaultCookieManager?.flush()
+            } catch (e: Throwable) {
+                // Ignore
+            }
         }
 
         activeAccountId = targetAccountId
@@ -89,15 +115,13 @@ class SessionIsolationManager(
         activeUrl = targetUrl
     }
 
-    /**
-     * Persists cookies from CookieManager for the specified account.
-     */
     suspend fun persistCurrentCookiesForAccount(accountId: String, url: String) = withContext(Dispatchers.IO) {
         if (url.isBlank()) return@withContext
         val domain = extractDomain(url) ?: return@withContext
 
+        val cm = getEffectiveCookieManager(accountId)
         val cookieHeader = try {
-            cookieManager?.getCookie(url)
+            cm?.getCookie(url)
         } catch (e: Throwable) {
             null
         }
@@ -140,17 +164,14 @@ class SessionIsolationManager(
     }
 
     /**
-     * Injects the JavaScript isolation bridge and proxies into the WebView.
+     * Injects fallback JavaScript isolation polyfill only when Native Multi-Profile is not supported.
      */
     fun injectIsolationPolyfill(webView: WebView, accountId: String, platformId: String) {
+        if (nativeProfileManager.isMultiProfileSupported) return // Native profile provides real storage!
         val polyfillJs = generateIsolationPolyfillJs(accountId, platformId)
         webView.evaluateJavascript(polyfillJs, null)
     }
 
-    /**
-     * JavaScript code that intercepts localStorage and sessionStorage
-     * and maps them to our secure Android Room backend via NaveHubBridge.
-     */
     fun generateIsolationPolyfillJs(accountId: String, platformId: String): String {
         return """
         (function() {
@@ -159,7 +180,6 @@ class SessionIsolationManager(
             window.__NAVEHUB_ACCOUNT_ID__ = "$accountId";
             window.__NAVEHUB_PLATFORM_ID__ = "$platformId";
 
-            // Storage implementation backed by Room via NaveHubBridge
             function createIsolatedStorage(type) {
                 return {
                     getItem: function(key) {
@@ -208,89 +228,75 @@ class SessionIsolationManager(
                     configurable: true
                 });
             } catch(e) {
-                console.warn("[NaveHub] Storage override notice: " + e.message);
+                console.warn("[NaveHub] Polyfill notice: " + e.message);
             }
-
-            window.NaveHub = {
-                accountId: "$accountId",
-                platformId: "$platformId",
-                setCookie: function(domain, name, value) {
-                    if (window.NaveHubBridge) {
-                        window.NaveHubBridge.saveCookie(domain, name, value);
-                    }
-                }
-            };
         })();
         """.trimIndent()
     }
 
     /**
-     * Creates the JavascriptInterface bridge instance to be added to WebView
+     * Creates a restricted auxiliary JavascriptInterface bound strictly to its accountId.
+     * BLOQUEIO 3 & 10: Bridge is non-essential and restricted to avoid arbitrary external origin abuse.
      */
-    fun createJavascriptBridge(): NaveHubBridge {
-        return NaveHubBridge(repository, this)
+    fun createRestrictedBridge(boundAccountId: String): RestrictedNaveHubBridge {
+        return RestrictedNaveHubBridge(boundAccountId, repository, this)
     }
 
-    /**
-     * JavaScript Bridge class exposed as `window.NaveHubBridge`
-     */
-    class NaveHubBridge(
+    class RestrictedNaveHubBridge(
+        private val boundAccountId: String,
         private val repository: NaveHubRepository,
         private val isolationManager: SessionIsolationManager
     ) {
         @JavascriptInterface
         fun getActiveAccountId(): String {
-            return isolationManager.activeAccountId ?: ""
-        }
-
-        @JavascriptInterface
-        fun getActivePlatformId(): String {
-            return isolationManager.activePlatformId ?: ""
+            // Strict guard: verify calling context matches bound account
+            if (isolationManager.activeAccountId != boundAccountId) return ""
+            return boundAccountId
         }
 
         @JavascriptInterface
         fun getStorageItem(typeStr: String, key: String): String {
-            val accountId = isolationManager.activeAccountId ?: return "___NULL_VALUE___"
+            if (isolationManager.activeAccountId != boundAccountId) return "___NULL_VALUE___"
             val type = if (typeStr == "SESSION") StorageType.SESSION else StorageType.LOCAL
             return runBlocking(Dispatchers.IO) {
-                val value = repository.getStorageValue(accountId, type, key)
+                val value = repository.getStorageValue(boundAccountId, type, key)
                 value ?: "___NULL_VALUE___"
             }
         }
 
         @JavascriptInterface
         fun setStorageItem(typeStr: String, key: String, value: String) {
-            val accountId = isolationManager.activeAccountId ?: return
+            if (isolationManager.activeAccountId != boundAccountId) return
             val type = if (typeStr == "SESSION") StorageType.SESSION else StorageType.LOCAL
             runBlocking(Dispatchers.IO) {
-                repository.setStorageItem(accountId, type, key, value)
+                repository.setStorageItem(boundAccountId, type, key, value)
             }
         }
 
         @JavascriptInterface
         fun removeStorageItem(typeStr: String, key: String) {
-            val accountId = isolationManager.activeAccountId ?: return
+            if (isolationManager.activeAccountId != boundAccountId) return
             val type = if (typeStr == "SESSION") StorageType.SESSION else StorageType.LOCAL
             runBlocking(Dispatchers.IO) {
-                repository.deleteStorageItem(accountId, type, key)
+                repository.deleteStorageItem(boundAccountId, type, key)
             }
         }
 
         @JavascriptInterface
         fun clearStorage(typeStr: String) {
-            val accountId = isolationManager.activeAccountId ?: return
+            if (isolationManager.activeAccountId != boundAccountId) return
             val type = if (typeStr == "SESSION") StorageType.SESSION else StorageType.LOCAL
             runBlocking(Dispatchers.IO) {
-                repository.clearStorage(accountId, type)
+                repository.clearStorage(boundAccountId, type)
             }
         }
 
         @JavascriptInterface
         fun getAllStorageJson(typeStr: String): String {
-            val accountId = isolationManager.activeAccountId ?: return "{}"
+            if (isolationManager.activeAccountId != boundAccountId) return "{}"
             val type = if (typeStr == "SESSION") StorageType.SESSION else StorageType.LOCAL
             return runBlocking(Dispatchers.IO) {
-                val items = repository.getStorageForAccountSync(accountId, type)
+                val items = repository.getStorageForAccountSync(boundAccountId, type)
                 val json = JSONObject()
                 for (item in items) {
                     json.put(item.key, item.value)
@@ -301,11 +307,11 @@ class SessionIsolationManager(
 
         @JavascriptInterface
         fun saveCookie(domain: String, name: String, value: String) {
-            val accountId = isolationManager.activeAccountId ?: return
+            if (isolationManager.activeAccountId != boundAccountId) return
             runBlocking(Dispatchers.IO) {
                 repository.saveCookie(
                     CookieItem(
-                        accountId = accountId,
+                        accountId = boundAccountId,
                         domain = domain,
                         name = name,
                         value = value

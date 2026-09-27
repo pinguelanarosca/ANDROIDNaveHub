@@ -42,12 +42,23 @@ data class StorageItem(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+data class ProfileDiagnostics(
+    val accountId: String,
+    val profileName: String,
+    val isMultiProfileSupported: Boolean,
+    val isCustomProfile: Boolean,
+    val profileStatus: String,
+    val webViewId: String
+)
+
 data class IsolationCriterionResult(
     val id: Int,
+    val category: String, // "ISOLAMENTO NATIVO DO WEBVIEW", "ISOLAMENTO DO ROOM", "PERSISTÊNCIA", "AUTENTICAÇÃO", "SERVICE WORKER", "CACHE", "BRIDGE", "NAVEGAÇÃO", "RECUPERAÇÃO APÓS REINICIALIZAÇÃO"
     val title: String,
     val description: String,
     val passed: Boolean,
-    val details: String
+    val details: String,
+    val evidence: String = ""
 )
 
 data class IsolationAuditReport(
@@ -55,5 +66,6 @@ data class IsolationAuditReport(
     val allPassed: Boolean,
     val passedCount: Int,
     val totalCount: Int,
+    val isMultiProfileSupported: Boolean,
     val criteriaResults: List<IsolationCriterionResult>
 )

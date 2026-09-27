@@ -5,11 +5,18 @@ import com.example.domain.model.Platform
 
 object SandboxHtmlGenerator {
 
-    fun generateHtml(platform: Platform, account: Account): String {
+    fun generateHtml(
+        platform: Platform,
+        account: Account,
+        isNativeProfile: Boolean = true,
+        profileName: String = "default"
+    ): String {
         val platformColor = platform.accentColorHex
         val platformName = platform.name
         val accountName = account.name
         val accountId = account.id
+
+        val profileBadge = if (isNativeProfile) "NATIVE PROFILE: $profileName" else "FALLBACK ISOLATION"
 
         return """
         <!DOCTYPE html>
@@ -54,6 +61,7 @@ object SandboxHtmlGenerator {
                     align-items: center;
                     gap: 8px;
                     margin-bottom: 8px;
+                    flex-wrap: wrap;
                 }
                 .badge {
                     background-color: var(--accent-color);
@@ -71,6 +79,16 @@ object SandboxHtmlGenerator {
                     font-size: 11px;
                     padding: 3px 8px;
                     border-radius: 6px;
+                    font-family: monospace;
+                }
+                .badge-profile {
+                    background-color: rgba(0, 229, 255, 0.15);
+                    border: 1px solid #00E5FF;
+                    color: #00E5FF;
+                    font-size: 10px;
+                    font-weight: bold;
+                    padding: 2px 6px;
+                    border-radius: 4px;
                     font-family: monospace;
                 }
                 h1 {
@@ -93,7 +111,7 @@ object SandboxHtmlGenerator {
                     gap: 12px;
                 }
                 .panel h2 {
-                    font-size: 14px;
+                    font-size: 13px;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                     color: var(--accent-color);
@@ -111,7 +129,7 @@ object SandboxHtmlGenerator {
                     color: #38BDF8;
                     white-space: pre-wrap;
                     word-break: break-all;
-                    min-height: 48px;
+                    min-height: 44px;
                     max-height: 120px;
                     overflow-y: auto;
                 }
@@ -163,7 +181,7 @@ object SandboxHtmlGenerator {
                     display: inline-flex;
                     align-items: center;
                     gap: 6px;
-                    font-size: 12px;
+                    font-size: 11px;
                     color: #10B981;
                     font-weight: 600;
                 }
@@ -190,24 +208,25 @@ object SandboxHtmlGenerator {
                 <div class="badge-row">
                     <span class="badge">$platformName</span>
                     <span class="badge-acc">$accountName</span>
+                    <span class="badge-profile">$profileBadge</span>
                     <div style="flex:1"></div>
                     <span class="status-chip">Sessão Ativa</span>
                 </div>
                 <h1>Ambiente Isolado: $accountName</h1>
                 <p class="sub">ID: $accountId</p>
-                <p class="sub" style="margin-top:2px;">Plataforma Oficial: <strong>${platform.defaultUrl}</strong></p>
+                <p class="sub">Profile: <strong>$profileName</strong> | Destino: ${platform.defaultUrl}</p>
             </div>
 
-            <!-- Autenticação Simulada -->
+            <!-- Autenticação Nativa -->
             <div class="panel">
-                <h2>1. Sessão & Autenticação da Conta</h2>
+                <h2>1. Sessão & Identidade da Conta</h2>
                 <div class="auth-box">
                     <div>
                         <div style="font-size:11px; color:#94A3B8;">Usuário Logado</div>
                         <div id="authUsername" style="font-size:14px; font-weight:700; color:#F8FAFC;">(Não autenticado)</div>
                     </div>
                     <div>
-                        <div style="font-size:11px; color:#94A3B8;">Token de Sessão</div>
+                        <div style="font-size:11px; color:#94A3B8;">Token de Autenticação</div>
                         <div id="authToken" style="font-size:12px; font-family:monospace; color:#38BDF8;">Nenhum</div>
                     </div>
                 </div>
@@ -218,9 +237,9 @@ object SandboxHtmlGenerator {
                 </div>
             </div>
 
-            <!-- LocalStorage -->
+            <!-- LocalStorage Nativo do WebView -->
             <div class="panel">
-                <h2>2. Local Storage (Persistente)</h2>
+                <h2>2. Local Storage Nativo (Nível WebView)</h2>
                 <div id="localDisplay" class="data-display">Carregando...</div>
                 <div class="input-row">
                     <input type="text" id="localKey" placeholder="Chave (ex: saldo, pref)">
@@ -233,14 +252,28 @@ object SandboxHtmlGenerator {
                 </div>
             </div>
 
-            <!-- Cookies -->
+            <!-- SessionStorage Nativo do WebView -->
             <div class="panel">
-                <h2>3. Cookies da Sessão</h2>
+                <h2>3. Session Storage Nativo (Nível WebView)</h2>
+                <div id="sessionDisplay" class="data-display">Carregando...</div>
+                <div class="input-row">
+                    <input type="text" id="sessionKey" placeholder="Chave de sessão">
+                    <input type="text" id="sessionVal" placeholder="Valor temporário">
+                    <button onclick="setSessionItem()">Salvar</button>
+                </div>
+                <div class="btn-group">
+                    <button class="secondary" onclick="refreshDisplay()">Atualizar</button>
+                </div>
+            </div>
+
+            <!-- Cookies Nativos do WebView Profile -->
+            <div class="panel">
+                <h2>4. Cookies Nativos do WebView</h2>
                 <div id="cookieDisplay" class="data-display">Carregando cookies...</div>
                 <div class="input-row">
                     <input type="text" id="cookieName" placeholder="Nome do Cookie">
                     <input type="text" id="cookieValue" placeholder="Valor">
-                    <button onclick="saveCustomCookie()">Gravar Cookie</button>
+                    <button onclick="saveNativeCookie()">Gravar Cookie</button>
                 </div>
                 <div class="btn-group">
                     <button class="secondary" onclick="refreshCookies()">Atualizar Cookies</button>
@@ -250,24 +283,25 @@ object SandboxHtmlGenerator {
             <script>
                 function refreshDisplay() {
                     try {
-                        const local = window.localStorage;
-                        let text = "";
-                        if (local.getAll) {
-                            const all = local.getAll();
-                            text = JSON.stringify(all, null, 2);
-                        } else {
-                            const obj = {};
-                            for (let i = 0; i < local.length; i++) {
-                                const k = local.key(i);
-                                obj[k] = local.getItem(k);
-                            }
-                            text = JSON.stringify(obj, null, 2);
+                        // Real standard window.localStorage
+                        const localObj = {};
+                        for (let i = 0; i < window.localStorage.length; i++) {
+                            const k = window.localStorage.key(i);
+                            localObj[k] = window.localStorage.getItem(k);
                         }
-                        document.getElementById('localDisplay').textContent = text || "(vazio)";
+                        document.getElementById('localDisplay').textContent = Object.keys(localObj).length ? JSON.stringify(localObj, null, 2) : "(vazio)";
 
-                        // Check auth
-                        const user = local.getItem('auth_user') || '(Não autenticado)';
-                        const token = local.getItem('auth_token') || 'Nenhum';
+                        // Real standard window.sessionStorage
+                        const sessObj = {};
+                        for (let i = 0; i < window.sessionStorage.length; i++) {
+                            const k = window.sessionStorage.key(i);
+                            sessObj[k] = window.sessionStorage.getItem(k);
+                        }
+                        document.getElementById('sessionDisplay').textContent = Object.keys(sessObj).length ? JSON.stringify(sessObj, null, 2) : "(vazio)";
+
+                        // Check auth in localStorage
+                        const user = window.localStorage.getItem('auth_user') || '(Não autenticado)';
+                        const token = window.localStorage.getItem('auth_token') || 'Nenhum';
                         document.getElementById('authUsername').textContent = user;
                         document.getElementById('authToken').textContent = token;
                     } catch(e) {
@@ -287,6 +321,17 @@ object SandboxHtmlGenerator {
                     }
                 }
 
+                function setSessionItem() {
+                    const k = document.getElementById('sessionKey').value.trim();
+                    const v = document.getElementById('sessionVal').value.trim();
+                    if (k) {
+                        window.sessionStorage.setItem(k, v);
+                        document.getElementById('sessionKey').value = '';
+                        document.getElementById('sessionVal').value = '';
+                        refreshDisplay();
+                    }
+                }
+
                 function clearLocalStorage() {
                     window.localStorage.clear();
                     refreshDisplay();
@@ -297,9 +342,7 @@ object SandboxHtmlGenerator {
                     window.localStorage.setItem('auth_user', name);
                     window.localStorage.setItem('auth_token', token);
                     window.localStorage.setItem('auth_timestamp', Date.now());
-                    if (window.NaveHub && window.NaveHub.setCookie) {
-                        window.NaveHub.setCookie("${platform.defaultUrl}", "auth_session", token);
-                    }
+                    document.cookie = "auth_session=" + token + "; path=/";
                     refreshDisplay();
                 }
 
@@ -312,18 +355,15 @@ object SandboxHtmlGenerator {
                     window.localStorage.removeItem('auth_user');
                     window.localStorage.removeItem('auth_token');
                     window.localStorage.removeItem('auth_timestamp');
+                    document.cookie = "auth_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
                     refreshDisplay();
                 }
 
-                function saveCustomCookie() {
+                function saveNativeCookie() {
                     const n = document.getElementById('cookieName').value.trim();
                     const v = document.getElementById('cookieValue').value.trim();
                     if (n && v) {
-                        if (window.NaveHub && window.NaveHub.setCookie) {
-                            window.NaveHub.setCookie("${platform.defaultUrl}", n, v);
-                        } else {
-                            document.cookie = n + "=" + v + "; path=/";
-                        }
+                        document.cookie = n + "=" + v + "; path=/";
                         document.getElementById('cookieName').value = '';
                         document.getElementById('cookieValue').value = '';
                         refreshCookies();

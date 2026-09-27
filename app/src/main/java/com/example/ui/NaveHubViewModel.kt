@@ -9,40 +9,44 @@ import com.example.domain.model.Account
 import com.example.domain.model.CookieItem
 import com.example.domain.model.IsolationAuditReport
 import com.example.domain.model.Platform
+import com.example.domain.model.ProfileDiagnostics
 import com.example.domain.model.StorageItem
 import com.example.domain.model.StorageType
+import com.example.manager.AccountWebViewPool
 import com.example.manager.IsolationAuditor
+import com.example.manager.NativeProfileManager
 import com.example.manager.SessionIsolationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-data class NaveHubUiState(
-    val platforms: List<Platform> = emptyList(),
-    val selectedPlatformId: String = "8u",
-    val accounts: List<Account> = emptyList(),
-    val selectedAccountId: String = "",
-    val isSandboxMode: Boolean = true,
-    val isAuditRunning: Boolean = false,
-    val auditReport: IsolationAuditReport? = null,
-    val activeCookies: List<CookieItem> = emptyList(),
-    val activeLocalStorage: List<StorageItem> = emptyList(),
-    val activeSessionStorage: List<StorageItem> = emptyList(),
-    val accountCounts: Map<String, Int> = emptyMap()
-)
 
 class NaveHubViewModel(application: Application) : AndroidViewModel(application) {
 
     val database: NaveHubDatabase = NaveHubDatabase.getDatabase(application, viewModelScope)
     val repository: NaveHubRepository = NaveHubRepository(database)
-    val isolationManager: SessionIsolationManager = SessionIsolationManager(application, repository, viewModelScope)
-    val auditor: IsolationAuditor = IsolationAuditor(repository, isolationManager)
+    val nativeProfileManager: NativeProfileManager = NativeProfileManager(application)
+    val isolationManager: SessionIsolationManager = SessionIsolationManager(
+        application,
+        repository,
+        viewModelScope,
+        nativeProfileManager
+    )
+    val auditor: IsolationAuditor = IsolationAuditor(
+        application,
+        repository,
+        isolationManager,
+        nativeProfileManager
+    )
+    val webViewPool: AccountWebViewPool = AccountWebViewPool(
+        application,
+        nativeProfileManager,
+        isolationManager
+    )
 
     private val _selectedPlatformId = MutableStateFlow("8u")
     val selectedPlatformId: StateFlow<String> = _selectedPlatformId.asStateFlow()
@@ -68,7 +72,9 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     private val _activeSessionStorage = MutableStateFlow<List<StorageItem>>(emptyList())
     val activeSessionStorage: StateFlow<List<StorageItem>> = _activeSessionStorage.asStateFlow()
 
-    // Remember last selected account per platform
+    private val _profileDiagnostics = MutableStateFlow<ProfileDiagnostics?>(null)
+    val profileDiagnostics: StateFlow<ProfileDiagnostics?> = _profileDiagnostics.asStateFlow()
+
     private val platformActiveAccountMap = mutableMapOf<String, String>()
 
     val platforms: StateFlow<List<Platform>> = repository.allPlatforms
@@ -89,16 +95,16 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             repository.ensureInitialized()
 
-            // Observe platforms and setup initial selection
             val initialPlatforms = repository.getPlatformsSync()
             if (initialPlatforms.isNotEmpty()) {
                 val initialPlatId = initialPlatforms.first().id
                 _selectedPlatformId.value = initialPlatId
                 val accounts = repository.getAccountsForPlatformSync(initialPlatId)
                 if (accounts.isNotEmpty()) {
-                    _selectedAccountId.value = accounts.first().id
-                    platformActiveAccountMap[initialPlatId] = accounts.first().id
-                    refreshActiveAccountData(accounts.first().id)
+                    val firstAccId = accounts.first().id
+                    _selectedAccountId.value = firstAccId
+                    platformActiveAccountMap[initialPlatId] = firstAccId
+                    refreshActiveAccountData(firstAccId)
                 }
             }
         }
@@ -116,7 +122,6 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
                 platformActiveAccountMap[platformId] = targetAccount.id
                 refreshActiveAccountData(targetAccount.id)
             } else if (accounts.isEmpty()) {
-                // Auto create account 1 if somehow empty
                 val newAcc = repository.createAccount(platformId, "Conta 1")
                 _selectedAccountId.value = newAcc.id
                 platformActiveAccountMap[platformId] = newAcc.id
@@ -151,6 +156,8 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     fun deleteAccount(accountId: String) {
         viewModelScope.launch {
             val currentPlatId = _selectedPlatformId.value
+            webViewPool.releaseAccountWebView(accountId)
+            nativeProfileManager.deleteProfile(accountId)
             repository.deleteAccount(accountId)
 
             val remaining = repository.getAccountsForPlatformSync(currentPlatId)
@@ -160,7 +167,6 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
                 platformActiveAccountMap[currentPlatId] = nextAccount.id
                 refreshActiveAccountData(nextAccount.id)
             } else {
-                // If all deleted, recreate default
                 val newAcc = repository.createAccount(currentPlatId, "Conta 1")
                 _selectedAccountId.value = newAcc.id
                 platformActiveAccountMap[currentPlatId] = newAcc.id
@@ -195,6 +201,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
             _activeCookies.value = repository.getCookiesForAccountSync(accountId)
             _activeLocalStorage.value = repository.getStorageForAccountSync(accountId, StorageType.LOCAL)
             _activeSessionStorage.value = repository.getStorageForAccountSync(accountId, StorageType.SESSION)
+            _profileDiagnostics.value = webViewPool.getDiagnostics(accountId)
         }
     }
 
@@ -236,5 +243,10 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
                 _isAuditRunning.value = false
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        webViewPool.releaseAll()
     }
 }

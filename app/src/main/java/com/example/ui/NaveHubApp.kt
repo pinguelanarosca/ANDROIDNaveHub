@@ -50,6 +50,7 @@ fun NaveHubApp(
     val isSandboxMode by viewModel.isSandboxMode.collectAsStateWithLifecycle()
     val isAuditRunning by viewModel.isAuditRunning.collectAsStateWithLifecycle()
     val auditReport by viewModel.auditReport.collectAsStateWithLifecycle()
+    val profileDiagnostics by viewModel.profileDiagnostics.collectAsStateWithLifecycle()
 
     val activeCookies by viewModel.activeCookies.collectAsStateWithLifecycle()
     val activeLocalStorage by viewModel.activeLocalStorage.collectAsStateWithLifecycle()
@@ -98,7 +99,10 @@ fun NaveHubApp(
                 accountCounts = accountCounts,
                 onSelectPlatform = { id -> viewModel.selectPlatform(id) },
                 onAddPlatformClick = { showAddPlatformDialog = true },
-                onOpenAuditClick = { showAuditDialog = true }
+                onOpenAuditClick = {
+                    viewModel.refreshActiveAccountData()
+                    showAuditDialog = true
+                }
             )
 
             // 2 & 3. RIGHT REGION: Top Bar (Accounts) + Central Area (Web/Content)
@@ -124,7 +128,7 @@ fun NaveHubApp(
                     onToggleSandboxMode = { viewModel.toggleSandboxMode(it) }
                 )
 
-                // 3. CENTRAL REGION: Embedded WebView / Navigation Environment
+                // 3. CENTRAL REGION: Embedded WebView / Navigation Environment with Dedicated WebViews
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -135,13 +139,12 @@ fun NaveHubApp(
                         NaveWebViewContainer(
                             account = selectedAccount,
                             platform = selectedPlatform,
-                            isolationManager = viewModel.isolationManager,
+                            webViewPool = viewModel.webViewPool,
                             isSandboxMode = isSandboxMode,
                             onUrlChange = { newUrl -> viewModel.updateAccountUrl(newUrl) },
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        // Empty / loading state
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -202,6 +205,7 @@ fun NaveHubApp(
     if (showAuditDialog) {
         IsolationAuditDialog(
             report = auditReport,
+            diagnostics = profileDiagnostics,
             isRunning = isAuditRunning,
             onRunAuditClick = { viewModel.runIsolationAudit() },
             onDismissRequest = { showAuditDialog = false }

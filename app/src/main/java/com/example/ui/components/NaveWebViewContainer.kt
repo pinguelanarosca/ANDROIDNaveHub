@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -39,7 +37,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,23 +57,21 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.domain.model.Account
 import com.example.domain.model.Platform
-import com.example.manager.SessionIsolationManager
+import com.example.manager.AccountWebViewPool
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberSurface
 import com.example.ui.theme.CyanNeon
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun NaveWebViewContainer(
     account: Account,
     platform: Platform,
-    isolationManager: SessionIsolationManager,
+    webViewPool: AccountWebViewPool,
     isSandboxMode: Boolean,
     onUrlChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     var currentUrlInput by remember(account.id, isSandboxMode) {
         mutableStateOf(if (isSandboxMode) "navehub://sandbox/${platform.id}/${account.name}" else account.currentUrl)
     }
@@ -85,28 +80,51 @@ fun NaveWebViewContainer(
     var isLoading by remember { mutableStateOf(false) }
     var loadProgress by remember { mutableFloatStateOf(0f) }
 
-    // Intercept hardware/system back button
-    BackHandler(enabled = canGoBack) {
-        webViewInstance?.goBack()
+    // Retrieve or create the dedicated WebView instance from pool
+    val webView = remember(account.id) {
+        webViewPool.getOrCreateWebView(
+            account = account,
+            platform = platform,
+            isSandboxMode = isSandboxMode,
+            onUrlChanged = { newUrl ->
+                currentUrlInput = newUrl
+                onUrlChange(newUrl)
+            }
+        )
     }
 
-    // Effect whenever account or mode changes: switch isolated session
-    LaunchedEffect(account.id, isSandboxMode) {
-        val targetUrl = if (isSandboxMode) "sandbox" else account.currentUrl
-        isolationManager.switchAccountEnvironment(account.id, platform.id, targetUrl)
+    // Update navigation states
+    LaunchedEffect(webView) {
+        canGoBack = webView.canGoBack()
+        canGoForward = webView.canGoForward()
+    }
 
-        webViewInstance?.let { wv ->
-            if (isSandboxMode) {
-                val html = SandboxHtmlGenerator.generateHtml(platform, account)
-                wv.loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
-            } else {
-                wv.loadUrl(account.currentUrl)
+    // Hardware back navigation
+    BackHandler(enabled = canGoBack) {
+        webView.goBack()
+        canGoBack = webView.canGoBack()
+        canGoForward = webView.canGoForward()
+    }
+
+    // Effect on mode change
+    LaunchedEffect(isSandboxMode) {
+        if (isSandboxMode) {
+            val html = SandboxHtmlGenerator.generateHtml(
+                platform = platform,
+                account = account,
+                isNativeProfile = true,
+                profileName = "navehub_profile_${account.id}"
+            )
+            webView.loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
+        } else {
+            if (!webView.url.orEmpty().startsWith("http")) {
+                webView.loadUrl(account.currentUrl)
             }
         }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Navigation & URL Control Bar
+        // Control Bar
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -120,13 +138,14 @@ fun NaveWebViewContainer(
                     .padding(horizontal = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Back Button
                 IconButton(
-                    onClick = { webViewInstance?.goBack() },
+                    onClick = {
+                        webView.goBack()
+                        canGoBack = webView.canGoBack()
+                        canGoForward = webView.canGoForward()
+                    },
                     enabled = canGoBack,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("nav_back_button")
+                    modifier = Modifier.size(36.dp).testTag("nav_back_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -136,13 +155,14 @@ fun NaveWebViewContainer(
                     )
                 }
 
-                // Forward Button
                 IconButton(
-                    onClick = { webViewInstance?.goForward() },
+                    onClick = {
+                        webView.goForward()
+                        canGoBack = webView.canGoBack()
+                        canGoForward = webView.canGoForward()
+                    },
                     enabled = canGoForward,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("nav_forward_button")
+                    modifier = Modifier.size(36.dp).testTag("nav_forward_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -152,21 +172,16 @@ fun NaveWebViewContainer(
                     )
                 }
 
-                // Refresh Button
                 IconButton(
                     onClick = {
                         if (isSandboxMode) {
-                            webViewInstance?.let { wv ->
-                                val html = SandboxHtmlGenerator.generateHtml(platform, account)
-                                wv.loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
-                            }
+                            val html = SandboxHtmlGenerator.generateHtml(platform, account)
+                            webView.loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
                         } else {
-                            webViewInstance?.reload()
+                            webView.reload()
                         }
                     },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("nav_reload_button")
+                    modifier = Modifier.size(36.dp).testTag("nav_reload_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -178,7 +193,6 @@ fun NaveWebViewContainer(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // URL / Address field
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -203,7 +217,7 @@ fun NaveWebViewContainer(
 
                         if (isSandboxMode) {
                             Text(
-                                text = "navehub://${platform.name}/${account.name} (Ambiente Sandbox)",
+                                text = "navehub://${platform.name}/${account.name} (Sandbox Isolado)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF94A3B8),
@@ -227,7 +241,7 @@ fun NaveWebViewContainer(
                                         }
                                         currentUrlInput = urlToLoad
                                         onUrlChange(urlToLoad)
-                                        webViewInstance?.loadUrl(urlToLoad)
+                                        webView.loadUrl(urlToLoad)
                                     }
                                 ),
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -247,19 +261,7 @@ fun NaveWebViewContainer(
             }
         }
 
-        // Progress bar when loading
-        if (isLoading) {
-            LinearProgressIndicator(
-                progress = { loadProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = CyanNeon,
-                trackColor = Color(0xFF1E293B)
-            )
-        }
-
-        // Central WebView area
+        // Central WebView area hosting the dedicated account WebView
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -268,89 +270,16 @@ fun NaveWebViewContainer(
                 .testTag("central_webview_container")
         ) {
             AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            databaseEnabled = true
-                            useWideViewPort = true
-                            loadWithOverviewMode = true
-                            cacheMode = WebSettings.LOAD_DEFAULT
-                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            userAgentString = "$userAgentString NaveHub/1.0"
-                        }
-
-                        // Add JS Bridge for isolated session storage
-                        addJavascriptInterface(isolationManager.createJavascriptBridge(), "NaveHubBridge")
-
-                        webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                // CRITICAL: Keep all navigation inside NaveHub!
-                                // Never open external browser or intent
-                                val url = request?.url?.toString() ?: return false
-                                if (url.startsWith("http://") || url.startsWith("https://")) {
-                                    view?.loadUrl(url)
-                                    currentUrlInput = url
-                                    onUrlChange(url)
-                                }
-                                return true
-                            }
-
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                super.onPageStarted(view, url, favicon)
-                                isLoading = true
-                                url?.let {
-                                    currentUrlInput = it
-                                    onUrlChange(it)
-                                }
-                            }
-
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                super.onPageFinished(view, url)
-                                isLoading = false
-                                canGoBack = view?.canGoBack() ?: false
-                                canGoForward = view?.canGoForward() ?: false
-
-                                // Inject isolation polyfill on finished
-                                view?.let {
-                                    isolationManager.injectIsolationPolyfill(it, account.id, platform.id)
-                                }
-                            }
-
-                            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                                super.onReceivedError(view, request, error)
-                                isLoading = false
-                            }
-                        }
-
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                loadProgress = newProgress / 100f
-                                if (newProgress >= 100) {
-                                    isLoading = false
-                                }
-                            }
-                        }
-
-                        // Initial load
-                        if (isSandboxMode) {
-                            val html = SandboxHtmlGenerator.generateHtml(platform, account)
-                            loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
-                        } else {
-                            loadUrl(account.currentUrl)
-                        }
-
-                        webViewInstance = this
-                    }
+                factory = { _ ->
+                    // Remove from previous parent if attached
+                    (webView.parent as? ViewGroup)?.removeView(webView)
+                    webView
                 },
-                update = { wv ->
-                    webViewInstance = wv
+                update = { view ->
+                    if (view != webView) {
+                        (view.parent as? ViewGroup)?.removeView(view)
+                        (webView.parent as? ViewGroup)?.removeView(webView)
+                    }
                 },
                 modifier = Modifier.fillMaxSize()
             )
