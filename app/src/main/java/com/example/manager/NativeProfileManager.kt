@@ -47,6 +47,11 @@ class NativeProfileManager(private val context: Context) {
     fun getOrCreateProfile(accountId: String): Profile? {
         val store = profileStore ?: return null
         val profileName = getProfileNameForAccount(accountId)
+        try {
+            (context.applicationContext as? com.example.NaveHubApplication)?.ensureProfileCacheDir(profileName)
+        } catch (e: Throwable) {
+            // Ignore
+        }
         return try {
             store.getOrCreateProfile(profileName)
         } catch (e: Throwable) {

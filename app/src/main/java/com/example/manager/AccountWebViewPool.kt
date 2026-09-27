@@ -55,8 +55,8 @@ class AccountWebViewPool(
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
 
-            // Optimized hardware layer rendering for WebView in virtualized environment
-            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+            // Allow system automatic layer selection (hardware/software rendering as available)
+            setLayerType(android.view.View.LAYER_TYPE_NONE, null)
 
             settings.apply {
                 javaScriptEnabled = true
