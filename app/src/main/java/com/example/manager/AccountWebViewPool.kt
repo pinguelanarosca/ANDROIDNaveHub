@@ -72,14 +72,35 @@ class AccountWebViewPool(
 
         // BLOQUEIO 1 & 2: Bind native profile BEFORE any page navigation or call!
         if (nativeProfileManager.isMultiProfileSupported) {
-            nativeProfileManager.bindWebViewToAccountProfile(webView, account.id)
+            val bindSuccess = nativeProfileManager.bindWebViewToAccountProfile(webView, account.id)
+            if (!bindSuccess) {
+                // REQUIREMENT 1: If binding fails, DO NOT load URL or sandbox content. Show explicit FAIL state.
+                val failHtml = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>BINDING_FAIL</title></head>
+                    <body style="background-color: #111; color: #ff5555; font-family: monospace; padding: 24px;">
+                        <h2>[FAIL] NATIVE_PROFILE_BINDING_FAILED</h2>
+                        <p><strong>Account:</strong> ${account.id}</p>
+                        <p><strong>Expected Profile:</strong> navehub_profile_${account.id}</p>
+                        <p><strong>Status:</strong> ERROR - Failed to bind or validate native profile on WebView.</p>
+                        <p>Navigation and sandbox execution aborted to prevent Default profile data leak.</p>
+                    </body>
+                    </html>
+                """.trimIndent()
+                webView.loadDataWithBaseURL(null, failHtml, "text/html", "UTF-8", null)
+                return webView
+            }
         }
 
-        // Add Auxiliary bridge with strict origin checking
-        webView.addJavascriptInterface(
-            sessionIsolationManager.createRestrictedBridge(account.id),
-            "NaveHubBridge"
-        )
+        // REQUIREMENT 18: Restrict NaveHubBridge strictly to Sandbox Mode where content is controlled by the app.
+        // For free web browsing (external URLs), NaveHubBridge is omitted to eliminate cross-origin iframe security risks.
+        if (isSandboxMode) {
+            webView.addJavascriptInterface(
+                sessionIsolationManager.createRestrictedBridge(account.id),
+                "NaveHubBridge"
+            )
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

@@ -45,10 +45,12 @@ data class StorageItem(
 data class ProfileDiagnostics(
     val accountId: String,
     val profileName: String,
+    val webViewId: String,
+    val boundProfileName: String,
+    val validationResult: String,
     val isMultiProfileSupported: Boolean,
     val isCustomProfile: Boolean,
-    val profileStatus: String,
-    val webViewId: String
+    val profileStatus: String
 )
 
 data class IsolationCriterionResult(

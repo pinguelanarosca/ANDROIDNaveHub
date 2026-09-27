@@ -62,13 +62,17 @@ class NativeProfileManager(private val context: Context) {
     /**
      * Associates a WebView with the Account's native Profile before any navigation.
      * CRITICAL: Must be called before loadUrl, evaluateJavascript, or page loads.
+     * Validates immediately with WebViewCompat.getProfile(webView) to guarantee expected profile.
      */
     fun bindWebViewToAccountProfile(webView: WebView, accountId: String): Boolean {
         if (!isMultiProfileSupported) return false
         val profile = getOrCreateProfile(accountId) ?: return false
+        val expectedProfileName = getProfileNameForAccount(accountId)
         return try {
             WebViewCompat.setProfile(webView, profile.name)
-            true
+            val boundProfile = WebViewCompat.getProfile(webView)
+            val boundName = boundProfile.name
+            (boundName == expectedProfileName) && (boundName != "Default") && (boundName != "default")
         } catch (e: Throwable) {
             false
         }
@@ -123,7 +127,7 @@ class NativeProfileManager(private val context: Context) {
      * Retrieves diagnostics about the profile binding state.
      */
     fun getDiagnostics(accountId: String, webView: WebView?): ProfileDiagnostics {
-        val profileName = getProfileNameForAccount(accountId)
+        val expectedProfileName = getProfileNameForAccount(accountId)
         val profile = if (isMultiProfileSupported) getOrCreateProfile(accountId) else null
 
         val currentBoundProfileName = if (webView != null && isMultiProfileSupported) {
@@ -137,23 +141,32 @@ class NativeProfileManager(private val context: Context) {
         }
 
         val defaultProfileName = "Default"
-        val isCustom = profile != null && profile.name != defaultProfileName && currentBoundProfileName == profileName
+        val isCustom = profile != null && profile.name != defaultProfileName && currentBoundProfileName == expectedProfileName
 
-        val status = when {
-            !isMultiProfileSupported -> "FALLBACK_LEGACY_ISOLATION"
-            profile == null -> "PROFILE_CREATION_FAILED"
+        val validationResult = when {
+            !isMultiProfileSupported -> "FALLBACK_LEGACY_UNSUPPORTED"
+            currentBoundProfileName == expectedProfileName && currentBoundProfileName != defaultProfileName -> "VALIDATED_SUCCESS"
             currentBoundProfileName == defaultProfileName -> "FAIL_DEFAULT_PROFILE_USED"
-            currentBoundProfileName == profileName -> "NATIVE_PROFILE_ACTIVE"
-            else -> "MISMATCH ($currentBoundProfileName != $profileName)"
+            webView == null -> "FAIL_NO_WEBVIEW"
+            else -> "FAIL_BINDING_MISMATCH"
+        }
+
+        val status = when (validationResult) {
+            "VALIDATED_SUCCESS" -> "NATIVE_PROFILE_ACTIVE"
+            "FALLBACK_LEGACY_UNSUPPORTED" -> "FALLBACK_LEGACY_ISOLATION"
+            "FAIL_DEFAULT_PROFILE_USED" -> "FAIL_DEFAULT_PROFILE_USED"
+            else -> "BINDING_FAIL ($validationResult)"
         }
 
         return ProfileDiagnostics(
             accountId = accountId,
-            profileName = profileName,
+            profileName = expectedProfileName,
+            webViewId = webView?.let { "WebView@${Integer.toHexString(it.hashCode())}" } ?: "none",
+            boundProfileName = currentBoundProfileName,
+            validationResult = validationResult,
             isMultiProfileSupported = isMultiProfileSupported,
             isCustomProfile = isCustom,
-            profileStatus = status,
-            webViewId = webView?.let { "WebView@${Integer.toHexString(it.hashCode())}" } ?: "none"
+            profileStatus = status
         )
     }
 }

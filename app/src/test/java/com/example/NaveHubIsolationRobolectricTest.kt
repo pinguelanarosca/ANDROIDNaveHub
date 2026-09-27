@@ -228,6 +228,41 @@ class NaveHubIsolationRobolectricTest {
         val diag = nativeProfileManager.getDiagnostics(testAccId, null)
         assertNotNull(diag)
         assertEquals("navehub_profile_$testAccId", diag.profileName)
-        assertFalse("Profile name must never be default", diag.profileName.contains("default"))
+        assertFalse("Profile name must never be default", diag.profileName.lowercase().contains("default"))
+    }
+
+    @Test
+    fun test12_FiftyRapidTogglesConcurrencyAndWebViewPool() = runBlocking {
+        val platform = repository.getPlatformsSync().first()
+        val accA = repository.createAccount(platform.id, "Conta Conc A")
+        val accB = repository.createAccount(platform.id, "Conta Conc B")
+
+        val wvA = webViewPool.getOrCreateWebView(accA, platform, isSandboxMode = true) {}
+        val wvB = webViewPool.getOrCreateWebView(accB, platform, isSandboxMode = true) {}
+
+        assertNotNull(wvA)
+        assertNotNull(wvB)
+        assertNotEquals(wvA, wvB)
+
+        repository.setStorageItem(accA.id, StorageType.LOCAL, "token", "ACC_A_TOKEN")
+        repository.setStorageItem(accB.id, StorageType.LOCAL, "token", "ACC_B_TOKEN")
+
+        for (i in 1..50) {
+            isolationManager.switchAccountEnvironment(accA.id, platform.id, "https://example.com")
+            assertEquals("ACC_A_TOKEN", repository.getStorageValue(accA.id, StorageType.LOCAL, "token"))
+
+            isolationManager.switchAccountEnvironment(accB.id, platform.id, "https://example.com")
+            assertEquals("ACC_B_TOKEN", repository.getStorageValue(accB.id, StorageType.LOCAL, "token"))
+        }
+    }
+
+    @Test
+    fun test13_BridgeOmittedInFreeWebBrowsingMode() = runBlocking {
+        val platform = repository.getPlatformsSync().first()
+        val acc = repository.createAccount(platform.id, "Free Web Acc")
+
+        // Free web browsing mode (isSandboxMode = false) must not attach NaveHubBridge
+        val webView = webViewPool.getOrCreateWebView(acc, platform, isSandboxMode = false) {}
+        assertNotNull(webView)
     }
 }

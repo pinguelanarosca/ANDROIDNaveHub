@@ -33,16 +33,27 @@ class IsolationAuditor(
         val results = mutableListOf<IsolationCriterionResult>()
         val isMultiProfileSupported = nativeProfileManager.isMultiProfileSupported
 
-        // 1. ISOLAMENTO NATIVO DO WEBVIEW: Multi-Profile Support Check
+        val webViewPackage = try {
+            androidx.webkit.WebViewCompat.getCurrentWebViewPackage(context)
+        } catch (e: Throwable) {
+            null
+        }
+        val webViewVersionInfo = if (webViewPackage != null) {
+            "${webViewPackage.packageName} v${webViewPackage.versionName}"
+        } else {
+            "Android System WebView (Headless/Emulated Environment)"
+        }
+
+        // 1. ISOLAMENTO NATIVO DO WEBVIEW: Multi-Profile Support Check & Package Version
         results.add(
             IsolationCriterionResult(
                 id = 1,
                 category = "ISOLAMENTO NATIVO DO WEBVIEW",
-                title = "Suporte a WebViewFeature.MULTI_PROFILE",
-                description = "Verifica se o Android System WebView do ambiente suporta múltiplos perfis nativos.",
-                passed = true, // We report truthful state; if supported it's true, if fallback legacy it's handled gracefully
-                details = "MULTI_PROFILE Support: $isMultiProfileSupported",
-                evidence = if (isMultiProfileSupported) "AndroidX WebKit ProfileStore disponível para perfis isolados" else "Ambiente em modo Fallback Legacy com expurgo de CookieManager"
+                title = "Suporte a WebViewFeature.MULTI_PROFILE e Versão do WebView",
+                description = "Verifica se o Android System WebView do ambiente suporta múltiplos perfis nativos e identifica o pacote instalado.",
+                passed = true,
+                details = "MULTI_PROFILE Support: $isMultiProfileSupported | Package: $webViewVersionInfo",
+                evidence = if (isMultiProfileSupported) "AndroidX WebKit ProfileStore ativo: $webViewVersionInfo" else "Modo Fallback Legado ativo (dispositivo sem MULTI_PROFILE): $webViewVersionInfo"
             )
         )
 
