@@ -200,19 +200,23 @@ class NaveHubRealWebViewInstrumentedTest {
     @Test
     fun test06_NaveHubBridgeSandboxConfinement() = runBlocking {
         val platform = repository.getPlatformsSync().first()
-        val acc = repository.createAccount(platform.id, "Bridge Test Acc")
+        val accFree = repository.createAccount(platform.id, "Free Web Acc")
+        val accSandbox = repository.createAccount(platform.id, "Sandbox Acc")
 
         try {
-            // Free Web mode (isSandboxMode = false) should not add NaveHubBridge
-            val wvFree = webViewPool.getOrCreateWebView(acc, platform, isSandboxMode = false) {}
-            assertNotNull(wvFree)
+            // Free Web mode (isSandboxMode = false): separate account instance
+            val wvFree = webViewPool.getOrCreateWebView(accFree, platform, isSandboxMode = false) {}
+            assertNotNull("Free Web WebView must be created", wvFree)
 
-            // Sandbox mode (isSandboxMode = true) adds NaveHubBridge
-            val wvSandbox = webViewPool.getOrCreateWebView(acc, platform, isSandboxMode = true) {}
-            assertNotNull(wvSandbox)
+            // Sandbox mode (isSandboxMode = true): separate account instance
+            val wvSandbox = webViewPool.getOrCreateWebView(accSandbox, platform, isSandboxMode = true) {}
+            assertNotNull("Sandbox WebView must be created", wvSandbox)
+            assertNotEquals("WebViews for distinct accounts must be distinct instances", wvFree, wvSandbox)
         } finally {
-            repository.deleteAccount(acc.id)
-            nativeProfileManager.deleteProfile(acc.id)
+            repository.deleteAccount(accFree.id)
+            repository.deleteAccount(accSandbox.id)
+            nativeProfileManager.deleteProfile(accFree.id)
+            nativeProfileManager.deleteProfile(accSandbox.id)
         }
     }
 }
