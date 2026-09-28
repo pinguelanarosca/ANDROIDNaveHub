@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.Account
+import com.example.domain.model.Platform
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberSurface
 import com.example.ui.theme.CyanNeon
@@ -349,6 +350,126 @@ fun AddPlatformDialog(
                 modifier = Modifier.testTag("dialog_platform_confirm_button")
             ) {
                 Text("Adicionar", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancelar", color = Color(0xFF94A3B8))
+            }
+        }
+    )
+}
+
+@Composable
+fun EditPlatformDialog(
+    platform: Platform,
+    onConfirm: (name: String, url: String, colorHex: String) -> Unit,
+    onOpenAccountsManager: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(platform.name) }
+    var url by remember { mutableStateOf(platform.defaultUrl) }
+    val colors = listOf("#00E5FF", "#00E676", "#FFAB00", "#FF4081", "#8B5CF6", "#F97316")
+    var selectedColor by remember { mutableStateOf(platform.accentColorHex) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CyberSurface,
+        title = {
+            Text(
+                text = "Editar Plataforma",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome da Plataforma") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_platform_name_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color(0xFFCBD5E1),
+                        focusedBorderColor = CyanNeon,
+                        unfocusedBorderColor = CyberBorder
+                    )
+                )
+
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL Padrão da Plataforma") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_platform_url_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color(0xFFCBD5E1),
+                        focusedBorderColor = CyanNeon,
+                        unfocusedBorderColor = CyberBorder
+                    )
+                )
+
+                Text(
+                    text = "Cor de Destaque:",
+                    fontSize = 12.sp,
+                    color = Color(0xFF94A3B8)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    colors.forEach { hex ->
+                        val color = Color(android.graphics.Color.parseColor(hex))
+                        val isSelected = selectedColor.equals(hex, ignoreCase = true)
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    if (isSelected) 3.dp else 1.dp,
+                                    if (isSelected) Color.White else Color.Transparent,
+                                    CircleShape
+                                )
+                                .clickable { selectedColor = hex }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                OutlinedButton(
+                    onClick = onOpenAccountsManager,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanNeon)
+                ) {
+                    Text("Gerenciar Contas Desta Plataforma", fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        val finalUrl = if (url.isNotBlank()) url else platform.defaultUrl
+                        onConfirm(name.trim(), finalUrl.trim(), selectedColor)
+                    }
+                },
+                enabled = name.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
+                modifier = Modifier.testTag("dialog_edit_platform_confirm_button")
+            ) {
+                Text("Salvar Alterações", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

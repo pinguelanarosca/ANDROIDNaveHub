@@ -5,8 +5,14 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +32,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -78,6 +86,11 @@ fun NaveWebViewContainer(
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    // Address bar is hidden by default across opening/switching accounts or platforms
+    var isAddressBarExpanded by remember(account.id, platform.id) {
+        mutableStateOf(false)
+    }
 
     // Retrieve or create the dedicated WebView instance from pool
     val webView = remember(account.id) {
@@ -155,190 +168,214 @@ fun NaveWebViewContainer(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Control Bar (Hidden in Fullscreen mode)
+        // Control Bar (Hidden by default, expandable via arrow; hidden in fullscreen)
         if (!isFullscreen) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp),
-                color = CyberSurface,
-                tonalElevation = 1.dp
+            AnimatedVisibility(
+                visible = isAddressBarExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(46.dp),
+                    color = CyberSurface,
+                    tonalElevation = 1.dp
                 ) {
-                    IconButton(
-                        onClick = {
-                            if (webView.canGoBack()) {
-                                webView.goBack()
-                                canGoBack = webView.canGoBack()
-                                canGoForward = webView.canGoForward()
-                            } else {
-                                webView.evaluateJavascript("window.history.back()", null)
-                            }
-                        },
+                    Row(
                         modifier = Modifier
-                            .size(36.dp)
-                            .testTag("nav_back_button")
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Voltar",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (webView.canGoForward()) {
-                                webView.goForward()
-                                canGoBack = webView.canGoBack()
-                                canGoForward = webView.canGoForward()
-                            } else {
-                                webView.evaluateJavascript("window.history.forward()", null)
-                            }
-                        },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("nav_forward_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Avançar",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            webView.reload()
-                            canGoBack = webView.canGoBack()
-                            canGoForward = webView.canGoForward()
-                        },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("nav_reload_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Recarregar",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Address URL input box
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F172A))
-                            .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                        IconButton(
+                            onClick = {
+                                if (webView.canGoBack()) {
+                                    webView.goBack()
+                                    canGoBack = webView.canGoBack()
+                                    canGoForward = webView.canGoForward()
+                                } else {
+                                    webView.evaluateJavascript("window.history.back()", null)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("nav_back_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = "Seguro",
-                                tint = CyanNeon,
-                                modifier = Modifier.size(14.dp)
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Voltar",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                        }
 
-                            BasicTextField(
-                                value = currentUrlInput,
-                                onValueChange = { currentUrlInput = it },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                cursorBrush = SolidColor(CyanNeon),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Uri,
-                                    imeAction = ImeAction.Go
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onGo = {
+                        IconButton(
+                            onClick = {
+                                if (webView.canGoForward()) {
+                                    webView.goForward()
+                                    canGoBack = webView.canGoBack()
+                                    canGoForward = webView.canGoForward()
+                                } else {
+                                    webView.evaluateJavascript("window.history.forward()", null)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("nav_forward_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Avançar",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                webView.reload()
+                                canGoBack = webView.canGoBack()
+                                canGoForward = webView.canGoForward()
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("nav_reload_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Recarregar",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Address URL input box
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF0F172A))
+                                .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Seguro",
+                                    tint = CyanNeon,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                BasicTextField(
+                                    value = currentUrlInput,
+                                    onValueChange = { currentUrlInput = it },
+                                    singleLine = true,
+                                    textStyle = TextStyle(
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    cursorBrush = SolidColor(CyanNeon),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Uri,
+                                        imeAction = ImeAction.Go
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onGo = {
+                                            val urlToLoad = formatUrlInput(currentUrlInput)
+                                            currentUrlInput = urlToLoad
+                                            onUrlChange(urlToLoad)
+                                            webView.loadUrl(urlToLoad)
+                                        }
+                                    ),
+                                    decorationBox = { innerTextField ->
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            if (currentUrlInput.isEmpty()) {
+                                                Text(
+                                                    "Digite uma URL...",
+                                                    color = Color(0xFF64748B),
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("url_input_field")
+                                )
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
+                                IconButton(
+                                    onClick = {
                                         val urlToLoad = formatUrlInput(currentUrlInput)
                                         currentUrlInput = urlToLoad
                                         onUrlChange(urlToLoad)
                                         webView.loadUrl(urlToLoad)
-                                    }
-                                ),
-                                decorationBox = { innerTextField ->
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        if (currentUrlInput.isEmpty()) {
-                                            Text(
-                                                "Digite uma URL...",
-                                                color = Color(0xFF64748B),
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                        innerTextField()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("url_input_field")
-                            )
-
-                            Spacer(modifier = Modifier.width(4.dp))
-
-                            IconButton(
-                                onClick = {
-                                    val urlToLoad = formatUrlInput(currentUrlInput)
-                                    currentUrlInput = urlToLoad
-                                    onUrlChange(urlToLoad)
-                                    webView.loadUrl(urlToLoad)
-                                },
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .testTag("nav_go_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "Navegar",
-                                    tint = CyanNeon,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                    },
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .testTag("nav_go_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = "Navegar",
+                                        tint = CyanNeon,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    // Maximize (Fullscreen) Button
-                    IconButton(
-                        onClick = { onToggleFullscreen(true) },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("maximize_webview_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "Maximizar WebView (Ecrã Inteiro)",
-                            tint = CyanNeon,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        // Maximize (Fullscreen) Button
+                        IconButton(
+                            onClick = { onToggleFullscreen(true) },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("maximize_webview_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fullscreen,
+                                contentDescription = "Maximizar WebView (Ecrã Inteiro)",
+                                tint = CyanNeon,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
+            }
+
+            // Slim expand/collapse arrow strip directly under the tabs
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .background(Color(0xFF0F172A))
+                    .clickable { isAddressBarExpanded = !isAddressBarExpanded }
+                    .testTag("toggle_address_bar_arrow"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isAddressBarExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isAddressBarExpanded) "Ocultar barra de endereços" else "Expandir barra de endereços",
+                    tint = CyanNeon,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
 

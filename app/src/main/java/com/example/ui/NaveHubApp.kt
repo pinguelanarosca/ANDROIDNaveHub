@@ -25,12 +25,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.domain.model.Account
+import com.example.domain.model.Platform
 import com.example.ui.components.AccountTabBar
 import com.example.ui.components.AddAccountDialog
 import com.example.ui.components.AddPlatformDialog
 import com.example.ui.components.BackupDialog
 import com.example.ui.components.DeleteAccountDialog
 import com.example.ui.components.EditAccountDialog
+import com.example.ui.components.EditPlatformDialog
 import com.example.ui.components.NaveWebViewContainer
 import com.example.ui.components.PlatformAccountsManagerDialog
 import com.example.ui.components.PlatformSidebar
@@ -76,6 +78,7 @@ fun NaveHubApp(
     var showAddPlatformDialog by remember { mutableStateOf(false) }
     var showAddAccountDialog by remember { mutableStateOf(false) }
     var showAccountsManager by remember { mutableStateOf(false) }
+    var platformToEdit by remember { mutableStateOf<Platform?>(null) }
     var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
     var showBackupDialog by remember { mutableStateOf(false) }
@@ -129,6 +132,7 @@ fun NaveHubApp(
                     selectedPlatformId = selectedPlatformId,
                     accountCounts = accountCounts,
                     onSelectPlatform = { id -> viewModel.selectPlatform(id) },
+                    onEditPlatform = { platform -> platformToEdit = platform },
                     onAddPlatformClick = { showAddPlatformDialog = true },
                     onBackupClick = {
                         scope.launch {
@@ -147,14 +151,14 @@ fun NaveHubApp(
                         .fillMaxSize()
                         .weight(1f)
                 ) {
-                    // 2. TOP REGION: Account Tabs (Sorted by VIP level)
+                    // 2. TOP REGION: Account Tabs (Only accounts on the top bar)
                     AccountTabBar(
                         platform = selectedPlatform,
                         accounts = platformAccounts,
                         selectedAccountId = selectedAccount?.id ?: "",
                         onSelectAccount = { id -> viewModel.selectAccount(id) },
-                        onAddAccountClick = { showAddAccountDialog = true },
-                        onOpenManagerClick = { showAccountsManager = true }
+                        onEditAccount = { account -> accountToEdit = account },
+                        onAddAccountClick = { showAddAccountDialog = true }
                     )
 
                     // 3. CENTRAL REGION: Embedded WebView Container
@@ -224,6 +228,21 @@ fun NaveHubApp(
                 showAddPlatformDialog = false
             },
             onDismiss = { showAddPlatformDialog = false }
+        )
+    }
+
+    platformToEdit?.let { platform ->
+        EditPlatformDialog(
+            platform = platform,
+            onConfirm = { newName, newUrl, newColor ->
+                viewModel.updatePlatform(platform.id, newName, newUrl, newColor)
+                platformToEdit = null
+            },
+            onOpenAccountsManager = {
+                platformToEdit = null
+                showAccountsManager = true
+            },
+            onDismiss = { platformToEdit = null }
         )
     }
 

@@ -62,6 +62,16 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
         platformDao.deletePlatformById(platformId)
     }
 
+    suspend fun updatePlatform(id: String, name: String, url: String, colorHex: String) {
+        val existing = platformDao.getPlatformById(id) ?: return
+        val updated = existing.copy(
+            name = name.trim(),
+            defaultUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url",
+            accentColorHex = colorHex
+        )
+        platformDao.updatePlatform(updated)
+    }
+
     // --- Accounts ---
     fun getAccountsForPlatform(platformId: String): Flow<List<Account>> =
         accountDao.getAccountsForPlatform(platformId).map { list ->

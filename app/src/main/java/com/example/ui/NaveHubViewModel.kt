@@ -230,6 +230,12 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updatePlatform(platformId: String, name: String, url: String, colorHex: String) {
+        viewModelScope.launch {
+            repository.updatePlatform(platformId, name, url, colorHex)
+        }
+    }
+
     fun toggleSandboxMode(enabled: Boolean) {
         _isSandboxMode.value = enabled
     }

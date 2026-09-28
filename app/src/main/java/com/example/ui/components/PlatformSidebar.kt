@@ -1,8 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +23,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,12 +41,14 @@ import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberSurface
 import com.example.ui.theme.CyanNeon
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlatformSidebar(
     platforms: List<Platform>,
     selectedPlatformId: String,
     accountCounts: Map<String, Int>,
     onSelectPlatform: (String) -> Unit,
+    onEditPlatform: (Platform) -> Unit,
     onAddPlatformClick: () -> Unit,
     onBackupClick: () -> Unit,
     onRestoreClick: () -> Unit,
@@ -106,7 +109,8 @@ fun PlatformSidebar(
                         isSelected = isSelected,
                         accentColor = accentColor,
                         accountCount = count,
-                        onClick = { onSelectPlatform(platform.id) }
+                        onClick = { onSelectPlatform(platform.id) },
+                        onLongClick = { onEditPlatform(platform) }
                     )
                 }
 
@@ -181,13 +185,15 @@ fun PlatformSidebar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlatformItem(
     platform: Platform,
     isSelected: Boolean,
     accentColor: Color,
     accountCount: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(10.dp)
     val bgColor = if (isSelected) accentColor.copy(alpha = 0.22f) else Color(0xFF131B2E)
@@ -199,7 +205,10 @@ private fun PlatformItem(
             .clip(shape)
             .background(bgColor)
             .border(if (isSelected) 2.dp else 1.dp, borderColor, shape)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .testTag("platform_item_${platform.id}"),
         contentAlignment = Alignment.Center
     ) {
