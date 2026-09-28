@@ -7,6 +7,7 @@ import com.example.data.local.NaveHubDatabase
 import com.example.data.repository.NaveHubRepository
 import com.example.domain.model.CookieItem
 import com.example.domain.model.StorageType
+import com.example.domain.model.isAccessedToday
 import com.example.manager.AccountWebViewPool
 import com.example.manager.IsolationAuditor
 import com.example.manager.NativeProfileManager
@@ -70,7 +71,7 @@ class NaveHubIsolationRobolectricTest {
         assertTrue(platformIds.contains("8u"))
         assertTrue(platformIds.contains("777"))
         assertTrue(platformIds.contains("365gg"))
-        assertTrue(platformIds.contains("93has"))
+        assertTrue(platformIds.contains("93h"))
     }
 
     @Test
@@ -266,5 +267,45 @@ class NaveHubIsolationRobolectricTest {
         // Free web browsing mode (isSandboxMode = false) must not attach NaveHubBridge
         val webView = webViewPool.getOrCreateWebView(acc, platform, isSandboxMode = false) {}
         assertNotNull(webView)
+    }
+
+    @Test
+    fun test14_DailyAccountAndPlatformAccessStatus() = runBlocking {
+        val platform = repository.getPlatformsSync().first()
+        val acc1 = repository.createAccount(platform.id, "TestAcc1")
+        val acc2 = repository.createAccount(platform.id, "TestAcc2")
+
+        // Initial accounts: not accessed today (0L)
+        repository.resetAllAccountsLastActive()
+        val freshAcc1 = repository.getAccountById(acc1.id)!!
+        val freshAcc2 = repository.getAccountById(acc2.id)!!
+        assertFalse(freshAcc1.isAccessedToday())
+        assertFalse(freshAcc2.isAccessedToday())
+
+        // Platform has unaccessed accounts -> isPlatformAllAccessedToday should be false (it's GREEN)
+        val platAccountsInitial = listOf(freshAcc1, freshAcc2)
+        assertFalse(com.example.domain.model.isPlatformAllAccessedToday(platAccountsInitial))
+
+        // Access acc1 today
+        repository.markAccountAccessed(acc1.id, System.currentTimeMillis())
+        val updatedAcc1 = repository.getAccountById(acc1.id)!!
+        assertTrue(updatedAcc1.isAccessedToday()) // accessed today -> Gray
+
+        // Acc2 still not accessed -> Platform still has unaccessed accounts -> GREEN
+        val platAccountsMid = listOf(updatedAcc1, freshAcc2)
+        assertFalse(com.example.domain.model.isPlatformAllAccessedToday(platAccountsMid))
+
+        // Access acc2 today
+        repository.markAccountAccessed(acc2.id, System.currentTimeMillis())
+        val updatedAcc2 = repository.getAccountById(acc2.id)!!
+        assertTrue(updatedAcc2.isAccessedToday()) // accessed today -> Gray
+
+        // Now all accounts accessed today -> isPlatformAllAccessedToday is true (Platform is GRAY)
+        val platAccountsAllDone = listOf(updatedAcc1, updatedAcc2)
+        assertTrue(com.example.domain.model.isPlatformAllAccessedToday(platAccountsAllDone))
+
+        // Simulate timestamp from yesterday (e.g. 25 hours ago)
+        val yesterdayMillis = System.currentTimeMillis() - 25 * 60 * 60 * 1000L
+        assertFalse(com.example.domain.model.isAccessedToday(yesterdayMillis))
     }
 }

@@ -123,6 +123,14 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
         accountDao.updateAccountName(accountId, name)
     }
 
+    suspend fun markAccountAccessed(accountId: String, timestamp: Long = System.currentTimeMillis()) {
+        accountDao.updateLastActiveTimestamp(accountId, timestamp)
+    }
+
+    suspend fun resetAllAccountsLastActive() {
+        accountDao.resetAllLastActiveTimestamps()
+    }
+
     suspend fun deleteAccount(accountId: String) {
         // Cascade removes cookies and storage in Room due to foreign keys,
         // but explicit purge ensures thorough cleanup:

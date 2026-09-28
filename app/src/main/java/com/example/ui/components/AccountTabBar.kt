@@ -8,11 +8,14 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.Account
 import com.example.domain.model.Platform
+import com.example.domain.model.isAccessedToday
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberSurface
 import com.example.ui.theme.CyanNeon
@@ -56,7 +60,7 @@ fun AccountTabBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(54.dp),
         color = CyberSurface,
         tonalElevation = 2.dp
     ) {
@@ -88,7 +92,7 @@ fun AccountTabBar(
                 // [+] Add Account button
                 Box(
                     modifier = Modifier
-                        .height(38.dp)
+                        .height(40.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF1E293B))
                         .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
@@ -129,13 +133,17 @@ private fun AccountTabItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val isOpenedToday = isAccessedToday(account.lastActiveTimestamp)
+    // Verde se esta conta não foi aberta no dia de hoje; CINZA se já foi acessada hoje
+    val statusLineColor = if (isOpenedToday) Color(0xFF64748B) else Color(0xFF00E676)
+
     val shape = RoundedCornerShape(8.dp)
     val bgColor = if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0xFF131B2E)
     val borderColor = if (isSelected) accentColor else Color(0xFF1E293B)
 
     Box(
         modifier = Modifier
-            .height(38.dp)
+            .height(42.dp)
             .clip(shape)
             .background(bgColor)
             .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
@@ -143,17 +151,34 @@ private fun AccountTabItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 12.dp, vertical = 2.dp)
             .testTag("account_tab_${account.id}"),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = account.name,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-            color = if (isSelected) Color.White else Color(0xFF94A3B8),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = account.name,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                color = if (isSelected) Color.White else Color(0xFF94A3B8),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(3.dp))
+
+            // Linha indicadora abaixo do título da conta
+            Box(
+                modifier = Modifier
+                    .width(30.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(statusLineColor)
+                    .testTag("account_status_line_${account.id}")
+            )
+        }
     }
 }

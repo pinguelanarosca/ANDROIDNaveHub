@@ -19,9 +19,24 @@ data class Account(
     val platformId: String,
     val name: String,
     val currentUrl: String,
-    val lastActiveTimestamp: Long = System.currentTimeMillis(),
+    val lastActiveTimestamp: Long = 0L,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+fun isAccessedToday(timestamp: Long): Boolean {
+    if (timestamp <= 0L) return false
+    val calLast = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val calNow = java.util.Calendar.getInstance()
+    return calLast.get(java.util.Calendar.YEAR) == calNow.get(java.util.Calendar.YEAR) &&
+           calLast.get(java.util.Calendar.DAY_OF_YEAR) == calNow.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+fun Account.isAccessedToday(): Boolean = isAccessedToday(lastActiveTimestamp)
+
+fun isPlatformAllAccessedToday(accounts: List<Account>): Boolean {
+    if (accounts.isEmpty()) return true
+    return accounts.all { it.isAccessedToday() }
+}
 
 data class CookieItem(
     val accountId: String,

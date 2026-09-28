@@ -23,7 +23,7 @@ data class AccountEntity(
     val platformId: String,
     val name: String,
     val currentUrl: String,
-    val lastActiveTimestamp: Long = System.currentTimeMillis(),
+    val lastActiveTimestamp: Long = 0L,
     val createdAt: Long = System.currentTimeMillis()
 ) {
     fun toDomain() = Account(

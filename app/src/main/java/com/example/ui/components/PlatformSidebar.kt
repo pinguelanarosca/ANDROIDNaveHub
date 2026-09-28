@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,7 +42,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.domain.model.Account
 import com.example.domain.model.Platform
+import com.example.domain.model.isAccessedToday
+import com.example.domain.model.isPlatformAllAccessedToday
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberSurface
 import com.example.ui.theme.CyanNeon
@@ -52,6 +56,7 @@ fun PlatformSidebar(
     platforms: List<Platform>,
     selectedPlatformId: String,
     accountCounts: Map<String, Int>,
+    allAccounts: List<Account>,
     onSelectPlatform: (String) -> Unit,
     onEditPlatform: (Platform) -> Unit,
     onAddPlatformClick: () -> Unit,
@@ -105,12 +110,16 @@ fun PlatformSidebar(
                         CyanNeon
                     }
                     val count = accountCounts[platform.id] ?: 0
+                    val platAccounts = allAccounts.filter { it.platformId == platform.id }
+                    // Linha verde até todas as contas terem sido acessadas no dia de hoje;
+                    // Linha cinza quando todas as contas dentro da plataforma já tiverem sido acessadas hoje.
+                    val isAllAccessedToday = isPlatformAllAccessedToday(platAccounts)
 
                     PlatformItem(
                         platform = platform,
                         isSelected = isSelected,
                         accentColor = accentColor,
-                        accountCount = count,
+                        isAllAccessedToday = isAllAccessedToday,
                         onClick = { onSelectPlatform(platform.id) },
                         onLongClick = { onEditPlatform(platform) }
                     )
@@ -193,20 +202,24 @@ private fun PlatformItem(
     platform: Platform,
     isSelected: Boolean,
     accentColor: Color,
-    accountCount: Int,
+    isAllAccessedToday: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(10.dp)
-    val bgColor = if (isSelected) accentColor.copy(alpha = 0.22f) else Color(0xFF131B2E)
-    val borderColor = if (isSelected) accentColor else Color(0xFF1E293B)
+    // Verde caso alguma conta dentro dela ainda não tenha sido acessada hoje;
+    // Cinza caso todas as contas dentro dela já tenham sido acessadas no dia de hoje.
+    val statusColor = if (!isAllAccessedToday) Color(0xFF00E676) else Color(0xFF64748B)
+
+    val bgColor = if (isSelected) accentColor.copy(alpha = 0.22f) else statusColor.copy(alpha = 0.10f)
+    val borderColor = if (isSelected) accentColor else statusColor.copy(alpha = 0.65f)
 
     Box(
         modifier = Modifier
-            .size(52.dp)
+            .size(54.dp)
             .clip(shape)
             .background(bgColor)
-            .border(if (isSelected) 2.dp else 1.dp, borderColor, shape)
+            .border(if (isSelected) 2.dp else 1.5.dp, borderColor, shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -219,27 +232,29 @@ private fun PlatformItem(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 2.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp)
         ) {
             Text(
                 text = platform.name,
                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                fontSize = if (platform.name.length > 4) 10.sp else 12.sp,
+                fontSize = if (platform.name.length > 4) 11.sp else 13.sp,
                 color = if (isSelected) accentColor else Color(0xFFE2E8F0),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Account count badge
-            if (accountCount > 0) {
-                Text(
-                    text = "$accountCount",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) accentColor else Color(0xFF64748B)
-                )
-            }
+            Spacer(modifier = Modifier.height(5.dp))
+
+            // Linha indicadora diretamente abaixo do texto nome da plataforma
+            Box(
+                modifier = Modifier
+                    .width(30.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(statusColor)
+                    .testTag("platform_status_line_${platform.id}")
+            )
         }
     }
 }

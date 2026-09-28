@@ -37,6 +37,12 @@ interface AccountDao {
     @Query("UPDATE accounts SET currentUrl = :url, lastActiveTimestamp = :timestamp WHERE id = :id")
     suspend fun updateAccountUrl(id: String, url: String, timestamp: Long = System.currentTimeMillis())
 
+    @Query("UPDATE accounts SET lastActiveTimestamp = :timestamp WHERE id = :id")
+    suspend fun updateLastActiveTimestamp(id: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("UPDATE accounts SET lastActiveTimestamp = 0")
+    suspend fun resetAllLastActiveTimestamps()
+
     @Query("UPDATE accounts SET name = :name WHERE id = :id")
     suspend fun updateAccountName(id: String, name: String)
 

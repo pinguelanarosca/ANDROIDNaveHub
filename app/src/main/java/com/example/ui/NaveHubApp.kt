@@ -53,6 +53,7 @@ fun NaveHubApp(
     val selectedPlatformId by viewModel.selectedPlatformId.collectAsStateWithLifecycle()
     val selectedAccountId by viewModel.selectedAccountId.collectAsStateWithLifecycle()
     val isSandboxMode by viewModel.isSandboxMode.collectAsStateWithLifecycle()
+    val currentDayOfYear by viewModel.currentDayOfYear.collectAsStateWithLifecycle()
 
     // Accounts for selected platform sorted by VIP level descending (highest VIP on the left)
     val platformAccounts = remember(allAccounts, selectedPlatformId) {
@@ -131,6 +132,7 @@ fun NaveHubApp(
                     platforms = platforms,
                     selectedPlatformId = selectedPlatformId,
                     accountCounts = accountCounts,
+                    allAccounts = allAccounts,
                     onSelectPlatform = { id -> viewModel.selectPlatform(id) },
                     onEditPlatform = { platform -> platformToEdit = platform },
                     onAddPlatformClick = { showAddPlatformDialog = true },

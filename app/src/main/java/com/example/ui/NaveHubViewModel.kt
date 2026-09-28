@@ -79,6 +79,9 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     private val _profileDiagnostics = MutableStateFlow<ProfileDiagnostics?>(null)
     val profileDiagnostics: StateFlow<ProfileDiagnostics?> = _profileDiagnostics.asStateFlow()
 
+    private val _currentDayOfYear = MutableStateFlow(java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR))
+    val currentDayOfYear: StateFlow<Int> = _currentDayOfYear.asStateFlow()
+
     val platforms: StateFlow<List<Platform>> = repository.allPlatforms
         .stateIn(
             scope = viewModelScope,
@@ -94,8 +97,25 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         )
 
     init {
+        // Periodic check to detect midnight transition and trigger recomposition
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
+                if (today != _currentDayOfYear.value) {
+                    _currentDayOfYear.value = today
+                }
+            }
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             repository.ensureInitialized()
+
+            val resetDone = prefs.getBoolean("daily_access_tracker_init_v2", false)
+            if (!resetDone) {
+                repository.resetAllAccountsLastActive()
+                prefs.edit().putBoolean("daily_access_tracker_init_v2", true).apply()
+            }
 
             val initialPlatforms = repository.getPlatformsSync()
             if (initialPlatforms.isNotEmpty()) {
@@ -117,6 +137,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
                     val targetAcc = accounts.find { it.id == rememberedAccId } ?: accounts.first()
                     _selectedAccountId.value = targetAcc.id
                     refreshActiveAccountData(targetAcc.id)
+                    markAccountAccessed(targetAcc.id)
                 }
             }
         }
@@ -141,6 +162,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         if (immediateTarget != null) {
             _selectedAccountId.value = immediateTarget.id
             refreshActiveAccountData(immediateTarget.id)
+            markAccountAccessed(immediateTarget.id)
         }
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -153,12 +175,14 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
                     _selectedAccountId.value = dbTarget.id
                     prefs.edit().putString("last_account_$platformId", dbTarget.id).apply()
                     refreshActiveAccountData(dbTarget.id)
+                    markAccountAccessed(dbTarget.id)
                 }
             } else {
                 val newAcc = repository.createAccount(platformId, "VIP1")
                 _selectedAccountId.value = newAcc.id
                 prefs.edit().putString("last_account_$platformId", newAcc.id).apply()
                 refreshActiveAccountData(newAcc.id)
+                markAccountAccessed(newAcc.id)
             }
         }
     }
@@ -167,6 +191,13 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         _selectedAccountId.value = accountId
         prefs.edit().putString("last_account_${_selectedPlatformId.value}", accountId).apply()
         refreshActiveAccountData(accountId)
+        markAccountAccessed(accountId)
+    }
+
+    fun markAccountAccessed(accountId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.markAccountAccessed(accountId, System.currentTimeMillis())
+        }
     }
 
     fun createAccount(platformId: String, customName: String? = null, customUrl: String? = null) {
@@ -175,6 +206,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
             _selectedAccountId.value = newAcc.id
             prefs.edit().putString("last_account_$platformId", newAcc.id).apply()
             refreshActiveAccountData(newAcc.id)
+            markAccountAccessed(newAcc.id)
         }
     }
 

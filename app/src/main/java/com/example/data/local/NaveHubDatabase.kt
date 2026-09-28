@@ -181,6 +181,7 @@ abstract class NaveHubDatabase : RoomDatabase() {
                             platformId = platform.id,
                             name = accName,
                             currentUrl = platform.defaultUrl,
+                            lastActiveTimestamp = 0L,
                             createdAt = System.currentTimeMillis() + (index++)
                         )
                         accountDao.insertAccount(account)
