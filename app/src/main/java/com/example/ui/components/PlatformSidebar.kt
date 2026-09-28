@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.SettingsBackupRestore
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,27 +61,46 @@ fun PlatformSidebar(
     onSelectPlatform: (String) -> Unit,
     onEditPlatform: (Platform) -> Unit,
     onAddPlatformClick: () -> Unit,
+    onUpdateClick: () -> Unit,
     onBackupClick: () -> Unit,
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Box(
         modifier = modifier
-            .width(68.dp)
-            .fillMaxHeight(),
-        color = CyberSurface,
-        tonalElevation = 4.dp
+            .width(70.dp)
+            .fillMaxHeight()
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(
+                        Color(0xF20B1325),
+                        Color(0xF5070B16),
+                        Color(0xFA04070E)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(
+                        Color(0x4038BDF8),
+                        Color(0x1A475569),
+                        Color(0x308B5CF6)
+                    )
+                ),
+                shape = androidx.compose.ui.graphics.RectangleShape
+            )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(vertical = 8.dp, horizontal = 4.dp),
+                .padding(vertical = 8.dp, horizontal = 5.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // App Logo (Transparent, free-floating, no visible box or border)
             Box(
                 modifier = Modifier
-                    .size(54.dp)
+                    .size(52.dp)
                     .testTag("navehub_logo_badge"),
                 contentAlignment = Alignment.Center
             ) {
@@ -109,7 +129,6 @@ fun PlatformSidebar(
                     } catch (e: Exception) {
                         CyanNeon
                     }
-                    val count = accountCounts[platform.id] ?: 0
                     val platAccounts = allAccounts.filter { it.platformId == platform.id }
                     // Linha verde até todas as contas terem sido acessadas no dia de hoje;
                     // Linha cinza quando todas as contas dentro da plataforma já tiverem sido acessadas hoje.
@@ -125,13 +144,17 @@ fun PlatformSidebar(
                     )
                 }
 
-                // Add Platform Button
+                // Add Platform Button (Glassmorphic)
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1E293B))
-                        .border(1.dp, CyberBorder, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color(0x301E293B), Color(0x180F172A))
+                            )
+                        )
+                        .border(1.dp, Color(0x33475569), RoundedCornerShape(12.dp))
                         .clickable(onClick = onAddPlatformClick)
                         .testTag("add_platform_button"),
                     contentAlignment = Alignment.Center
@@ -147,18 +170,45 @@ fun PlatformSidebar(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Bottom-Left Actions: Backup & Restore Buttons
+            // Bottom-Left Actions: Update, Backup & Restore Buttons (Translucent neon glass)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Update App Button (Verificar atualização do APK no GitHub)
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color(0x3500E676), Color(0x10064E3B))
+                            )
+                        )
+                        .border(1.dp, Color(0xFF00E676).copy(alpha = 0.5f), RoundedCornerShape(11.dp))
+                        .clickable(onClick = onUpdateClick)
+                        .testTag("sidebar_update_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = "Verificar Atualização do APK",
+                        tint = Color(0xFF00E676),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 // Backup Button
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF0F172A))
-                        .border(1.dp, CyanNeon.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color(0x3500F0FF), Color(0x10082F49))
+                            )
+                        )
+                        .border(1.dp, CyanNeon.copy(alpha = 0.45f), RoundedCornerShape(11.dp))
                         .clickable(onClick = onBackupClick)
                         .testTag("sidebar_backup_button"),
                     contentAlignment = Alignment.Center
@@ -175,9 +225,13 @@ fun PlatformSidebar(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF0F172A))
-                        .border(1.dp, Color(0xFFFFB300).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color(0x35FFB703), Color(0x10451A03))
+                            )
+                        )
+                        .border(1.dp, Color(0xFFFFB703).copy(alpha = 0.5f), RoundedCornerShape(11.dp))
                         .clickable(onClick = onRestoreClick)
                         .testTag("sidebar_restore_button"),
                     contentAlignment = Alignment.Center
@@ -185,7 +239,7 @@ fun PlatformSidebar(
                     Icon(
                         imageVector = Icons.Default.SettingsBackupRestore,
                         contentDescription = "Restaurar Backup (Sobrescrever)",
-                        tint = Color(0xFFFFB300),
+                        tint = Color(0xFFFFB703),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -206,20 +260,35 @@ private fun PlatformItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(12.dp)
     // Verde caso alguma conta dentro dela ainda não tenha sido acessada hoje;
     // Cinza caso todas as contas dentro dela já tenham sido acessadas no dia de hoje.
     val statusColor = if (!isAllAccessedToday) Color(0xFF00E676) else Color(0xFF64748B)
 
-    val bgColor = if (isSelected) accentColor.copy(alpha = 0.22f) else statusColor.copy(alpha = 0.10f)
-    val borderColor = if (isSelected) accentColor else statusColor.copy(alpha = 0.65f)
+    val itemBrush = if (isSelected) {
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            listOf(
+                accentColor.copy(alpha = 0.32f),
+                accentColor.copy(alpha = 0.12f)
+            )
+        )
+    } else {
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            listOf(
+                Color(0x281E293B),
+                Color(0x120F172A)
+            )
+        )
+    }
+
+    val borderColor = if (isSelected) accentColor else Color(0x33475569)
 
     Box(
         modifier = Modifier
-            .size(54.dp)
+            .size(56.dp)
             .clip(shape)
-            .background(bgColor)
-            .border(if (isSelected) 2.dp else 1.5.dp, borderColor, shape)
+            .background(itemBrush)
+            .border(if (isSelected) 1.8.dp else 1.dp, borderColor, shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -238,7 +307,7 @@ private fun PlatformItem(
                 text = platform.name,
                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                 fontSize = if (platform.name.length > 4) 11.sp else 13.sp,
-                color = if (isSelected) accentColor else Color(0xFFE2E8F0),
+                color = if (isSelected) accentColor else Color(0xFFF1F5F9),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -250,8 +319,8 @@ private fun PlatformItem(
             Box(
                 modifier = Modifier
                     .width(30.dp)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(1.5.dp))
+                    .height(3.5.dp)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(statusColor)
                     .testTag("platform_status_line_${platform.id}")
             )

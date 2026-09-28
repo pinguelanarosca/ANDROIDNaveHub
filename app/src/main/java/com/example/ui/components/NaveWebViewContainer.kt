@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,6 +88,7 @@ fun NaveWebViewContainer(
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
+    var pageLoadingProgress by remember(account.id) { mutableIntStateOf(0) }
 
     // Address bar is hidden by default across opening/switching accounts or platforms
     var isAddressBarExpanded by remember(account.id, platform.id) {
@@ -101,6 +104,9 @@ fun NaveWebViewContainer(
             onUrlChanged = { newUrl ->
                 currentUrlInput = newUrl
                 onUrlChange(newUrl)
+            },
+            onProgressChanged = { progress ->
+                pageLoadingProgress = progress
             }
         ).also { wv ->
             if (wv.url.isNullOrBlank() && account.currentUrl.isNotBlank()) {
@@ -178,14 +184,14 @@ fun NaveWebViewContainer(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(46.dp),
-                    color = CyberSurface,
-                    tonalElevation = 1.dp
+                        .height(48.dp),
+                    color = Color(0xF20B1325),
+                    tonalElevation = 6.dp
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp),
+                            .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
@@ -200,15 +206,19 @@ fun NaveWebViewContainer(
                             },
                             modifier = Modifier
                                 .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x281E293B))
                                 .testTag("nav_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Voltar",
-                                tint = Color.White,
+                                tint = Color(0xFFF1F5F9),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(3.dp))
 
                         IconButton(
                             onClick = {
@@ -222,15 +232,19 @@ fun NaveWebViewContainer(
                             },
                             modifier = Modifier
                                 .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x281E293B))
                                 .testTag("nav_forward_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Avançar",
-                                tint = Color.White,
+                                tint = Color(0xFFF1F5F9),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(3.dp))
 
                         IconButton(
                             onClick = {
@@ -240,27 +254,29 @@ fun NaveWebViewContainer(
                             },
                             modifier = Modifier
                                 .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x281E293B))
                                 .testTag("nav_reload_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Recarregar",
-                                tint = Color.White,
+                                tint = Color(0xFFF1F5F9),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                        // Address URL input box
+                        // Address URL input box (Glassmorphic capsule)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(34.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0F172A))
-                                .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp),
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0x60060A13))
+                                .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(
@@ -327,14 +343,14 @@ fun NaveWebViewContainer(
                                         webView.loadUrl(urlToLoad)
                                     },
                                     modifier = Modifier
-                                        .size(24.dp)
+                                        .size(26.dp)
                                         .testTag("nav_go_button")
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                         contentDescription = "Navegar",
                                         tint = CyanNeon,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
@@ -347,6 +363,8 @@ fun NaveWebViewContainer(
                             onClick = { onToggleFullscreen(true) },
                             modifier = Modifier
                                 .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x2800F0FF))
                                 .testTag("maximize_webview_button")
                         ) {
                             Icon(
@@ -365,7 +383,11 @@ fun NaveWebViewContainer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(18.dp)
-                    .background(Color(0xFF0F172A))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(Color(0xE00C1424), Color(0xF0080D18))
+                        )
+                    )
                     .clickable { isAddressBarExpanded = !isAddressBarExpanded }
                     .testTag("toggle_address_bar_arrow"),
                 contentAlignment = Alignment.Center
@@ -401,11 +423,30 @@ fun NaveWebViewContainer(
                     if (currentChild != webView) {
                         container.removeAllViews()
                         (webView.parent as? ViewGroup)?.removeView(webView)
-                        container.addView(webView)
+                        container.addView(
+                            webView,
+                            ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
+            // Sleek progress bar while web page is loading
+            if (pageLoadingProgress in 1..99) {
+                LinearProgressIndicator(
+                    progress = { pageLoadingProgress / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.TopCenter),
+                    color = CyanNeon,
+                    trackColor = Color(0x3300F0FF)
+                )
+            }
 
             // In Fullscreen mode: Floating exit button at top-right
             if (isFullscreen) {

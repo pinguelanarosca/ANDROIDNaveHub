@@ -57,26 +57,43 @@ fun AccountTabBar(
         CyanNeon
     }
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp),
-        color = CyberSurface,
-        tonalElevation = 2.dp
+            .height(48.dp)
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(
+                        Color(0xF00D1629),
+                        Color(0xF7080E1B)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(
+                        Color(0x3538BDF8),
+                        Color(0x18475569),
+                        Color(0x308B5CF6)
+                    )
+                ),
+                shape = androidx.compose.ui.graphics.RectangleShape
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Scrollable tabs of accounts (Platform indicator removed per request: only accounts remain)
+            // Scrollable tabs of accounts
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 accounts.forEach { account ->
                     val isSelected = account.id == selectedAccountId
@@ -89,15 +106,19 @@ fun AccountTabBar(
                     )
                 }
 
-                // [+] Add Account button
+                // [+] Add Account button (Glassmorphic)
                 Box(
                     modifier = Modifier
-                        .height(40.dp)
+                        .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF1E293B))
-                        .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(Color(0x3500F0FF), Color(0x120369A1))
+                            )
+                        )
+                        .border(1.dp, CyanNeon.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
                         .clickable(onClick = onAddAccountClick)
-                        .padding(horizontal = 10.dp)
+                        .padding(horizontal = 8.dp)
                         .testTag("add_account_button"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -109,11 +130,11 @@ fun AccountTabBar(
                             imageVector = Icons.Default.Add,
                             contentDescription = "Nova Conta",
                             tint = CyanNeon,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = "Conta",
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = CyanNeon
                         )
@@ -138,42 +159,57 @@ private fun AccountTabItem(
     val statusLineColor = if (isOpenedToday) Color(0xFF64748B) else Color(0xFF00E676)
 
     val shape = RoundedCornerShape(8.dp)
-    val bgColor = if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0xFF131B2E)
-    val borderColor = if (isSelected) accentColor else Color(0xFF1E293B)
+    val tabBrush = if (isSelected) {
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            listOf(
+                accentColor.copy(alpha = 0.30f),
+                accentColor.copy(alpha = 0.10f)
+            )
+        )
+    } else {
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            listOf(
+                Color(0x301B2A4A),
+                Color(0x150F172A)
+            )
+        )
+    }
+    val borderColor = if (isSelected) accentColor else Color(0x33475569)
 
     Box(
         modifier = Modifier
-            .height(42.dp)
+            .height(36.dp)
             .clip(shape)
-            .background(bgColor)
+            .background(tabBrush)
             .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .padding(horizontal = 4.dp, vertical = 1.dp)
             .testTag("account_tab_${account.id}"),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 1.dp)
         ) {
             Text(
                 text = account.name,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                color = if (isSelected) Color.White else Color(0xFF94A3B8),
+                color = if (isSelected) Color.White else Color(0xFFE2E8F0),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // Linha indicadora abaixo do título da conta
             Box(
                 modifier = Modifier
-                    .width(30.dp)
+                    .width(22.dp)
                     .height(3.dp)
                     .clip(RoundedCornerShape(1.5.dp))
                     .background(statusLineColor)

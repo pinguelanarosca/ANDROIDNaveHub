@@ -15,9 +15,11 @@ import com.example.domain.model.ProfileDiagnostics
 import com.example.domain.model.StorageItem
 import com.example.domain.model.StorageType
 import com.example.manager.AccountWebViewPool
+import com.example.manager.AppUpdateChecker
 import com.example.manager.IsolationAuditor
 import com.example.manager.NativeProfileManager
 import com.example.manager.SessionIsolationManager
+import com.example.manager.UpdateInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,6 +51,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         nativeProfileManager,
         isolationManager
     )
+    val updateChecker: AppUpdateChecker = AppUpdateChecker(application)
 
     private val prefs = application.getSharedPreferences("navehub_platform_state", Context.MODE_PRIVATE)
 
@@ -348,6 +351,14 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun checkForAppUpdates(): UpdateInfo {
+        return updateChecker.checkForUpdates()
+    }
+
+    fun openUrl(url: String) {
+        updateChecker.openUrl(url)
     }
 
     override fun onCleared() {

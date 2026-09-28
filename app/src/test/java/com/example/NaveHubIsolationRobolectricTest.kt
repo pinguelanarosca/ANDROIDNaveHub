@@ -308,4 +308,15 @@ class NaveHubIsolationRobolectricTest {
         val yesterdayMillis = System.currentTimeMillis() - 25 * 60 * 60 * 1000L
         assertFalse(com.example.domain.model.isAccessedToday(yesterdayMillis))
     }
+
+    @Test
+    fun test15_AppUpdateCheckerReturnsValidPayload() = runBlocking {
+        val updateChecker = com.example.manager.AppUpdateChecker(context)
+        val updateInfo = updateChecker.checkForUpdates()
+        assertNotNull(updateInfo)
+        assertNotNull(updateInfo.currentVersion)
+        assertNotNull(updateInfo.latestVersion)
+        assertNotNull(updateInfo.downloadUrl)
+        assertTrue(updateInfo.downloadUrl.endsWith(".apk"))
+    }
 }

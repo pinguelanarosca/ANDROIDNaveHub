@@ -2,16 +2,21 @@ package com.example.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,12 +28,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.domain.model.Account
 import com.example.domain.model.Platform
+import com.example.manager.UpdateInfo
 import com.example.ui.components.AccountTabBar
 import com.example.ui.components.AddAccountDialog
 import com.example.ui.components.AddPlatformDialog
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.BackupDialog
 import com.example.ui.components.DeleteAccountDialog
 import com.example.ui.components.EditAccountDialog
@@ -39,6 +50,7 @@ import com.example.ui.components.PlatformSidebar
 import com.example.ui.components.RestoreDialog
 import com.example.ui.theme.CyberBg
 import com.example.ui.theme.CyanNeon
+import com.example.ui.theme.NaveHubTheme
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,10 +67,14 @@ fun NaveHubApp(
     val isSandboxMode by viewModel.isSandboxMode.collectAsStateWithLifecycle()
     val currentDayOfYear by viewModel.currentDayOfYear.collectAsStateWithLifecycle()
 
+    val selectedPlatform = platforms.find { it.id == selectedPlatformId }
+        ?: platforms.firstOrNull()
+
     // Accounts for selected platform sorted by VIP level descending (highest VIP on the left)
-    val platformAccounts = remember(allAccounts, selectedPlatformId) {
+    val platformAccounts = remember(allAccounts, selectedPlatform?.id) {
+        val currentPlatId = selectedPlatform?.id ?: selectedPlatformId
         allAccounts
-            .filter { it.platformId == selectedPlatformId }
+            .filter { it.platformId == currentPlatId }
             .sortedWith(
                 compareByDescending<Account> { viewModel.getVipLevel(it.name) }
                     .thenBy { it.name }
@@ -70,7 +86,6 @@ fun NaveHubApp(
         allAccounts.groupBy { it.platformId }.mapValues { it.value.size }
     }
 
-    val selectedPlatform = platforms.find { it.id == selectedPlatformId }
     val selectedAccount = platformAccounts.find { it.id == selectedAccountId }
         ?: platformAccounts.firstOrNull()
 
@@ -85,6 +100,9 @@ fun NaveHubApp(
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var backupJsonContent by remember { mutableStateOf("") }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfoState by remember { mutableStateOf<UpdateInfo?>(null) }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -111,12 +129,7 @@ fun NaveHubApp(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = CyanNeon)
-                    }
+                    LoadingScreen()
                 }
             }
         } else {
@@ -127,15 +140,23 @@ fun NaveHubApp(
                     .padding(paddingValues)
                     .testTag("navehub_main_screen")
             ) {
-                // 1. LEFT REGION: Slim Platform Sidebar with Backup & Restore in bottom-left
+                // 1. LEFT REGION: Slim Platform Sidebar with Update, Backup & Restore in bottom-left
                 PlatformSidebar(
                     platforms = platforms,
-                    selectedPlatformId = selectedPlatformId,
+                    selectedPlatformId = selectedPlatform?.id ?: selectedPlatformId,
                     accountCounts = accountCounts,
                     allAccounts = allAccounts,
                     onSelectPlatform = { id -> viewModel.selectPlatform(id) },
                     onEditPlatform = { platform -> platformToEdit = platform },
                     onAddPlatformClick = { showAddPlatformDialog = true },
+                    onUpdateClick = {
+                        showUpdateDialog = true
+                        isCheckingUpdate = true
+                        scope.launch {
+                            updateInfoState = viewModel.checkForAppUpdates()
+                            isCheckingUpdate = false
+                        }
+                    },
                     onBackupClick = {
                         scope.launch {
                             backupJsonContent = viewModel.generateBackupJson()
@@ -182,12 +203,7 @@ fun NaveHubApp(
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = CyanNeon)
-                            }
+                            LoadingScreen()
                         }
                     }
                 }
@@ -196,6 +212,20 @@ fun NaveHubApp(
     }
 
     // --- Dialogs ---
+
+    if (showUpdateDialog) {
+        AppUpdateDialog(
+            isLoading = isCheckingUpdate,
+            updateInfo = updateInfoState,
+            onDownloadApk = { url ->
+                viewModel.openUrl(url)
+            },
+            onOpenGitHub = { url ->
+                viewModel.openUrl(url)
+            },
+            onDismiss = { showUpdateDialog = false }
+        )
+    }
 
     if (showBackupDialog) {
         BackupDialog(
@@ -253,7 +283,7 @@ fun NaveHubApp(
             platformName = selectedPlatform?.name ?: "Plataforma",
             onConfirm = { customName, customUrl ->
                 viewModel.createAccount(
-                    platformId = selectedPlatformId,
+                    platformId = selectedPlatform?.id ?: selectedPlatformId,
                     customName = customName.takeIf { it.isNotBlank() },
                     customUrl = customUrl.takeIf { it.isNotBlank() }
                 )
@@ -301,5 +331,94 @@ fun NaveHubApp(
             },
             onDismiss = { accountToDelete = null }
         )
+    }
+}
+
+@Composable
+fun LoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                color = CyanNeon,
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 3.dp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Carregando NaveHub...",
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 400)
+@Composable
+fun NaveHubPreview() {
+    val samplePlatforms = listOf(
+        Platform("8u", "8U", "https://8u.com", "#00E676"),
+        Platform("777", "777", "https://777vipv0.com/#/home", "#FFAB00"),
+        Platform("365gg", "365GG", "https://365gg2.com/#/home", "#00B0FF"),
+        Platform("93h", "93H", "https://x83yy7.com/main/inicio", "#FF4081")
+    )
+    val sampleAccounts = listOf(
+        Account("8u_3444vip8", "8u", "3444VIP8", "https://8u.com"),
+        Account("8u_4202vip7", "8u", "4202VIP7", "https://8u.com"),
+        Account("8u_5787vip7", "8u", "5787VIP7", "https://8u.com")
+    )
+    NaveHubTheme {
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing,
+            containerColor = CyberBg
+        ) { paddingValues ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                PlatformSidebar(
+                    platforms = samplePlatforms,
+                    selectedPlatformId = "8u",
+                    accountCounts = mapOf("8u" to 3, "777" to 4, "365gg" to 8, "93h" to 4),
+                    allAccounts = sampleAccounts,
+                    onSelectPlatform = {},
+                    onEditPlatform = {},
+                    onAddPlatformClick = {},
+                    onUpdateClick = {},
+                    onBackupClick = {},
+                    onRestoreClick = {}
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                ) {
+                    AccountTabBar(
+                        platform = samplePlatforms.first(),
+                        accounts = sampleAccounts,
+                        selectedAccountId = sampleAccounts.first().id,
+                        onSelectAccount = {},
+                        onEditAccount = {},
+                        onAddAccountClick = {}
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF090D16)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Área de Navegação Web", color = Color(0xFF64748B))
+                    }
+                }
+            }
+        }
     }
 }

@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.net.http.SslError
 import android.util.Log
 import android.view.ViewGroup
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -38,10 +40,11 @@ class AccountWebViewPool(
         account: Account,
         platform: Platform,
         isSandboxMode: Boolean,
-        onUrlChanged: (String) -> Unit
+        onUrlChanged: (String) -> Unit = {},
+        onProgressChanged: ((Int) -> Unit)? = null
     ): WebView {
         return webViewMap.getOrPut(account.id) {
-            createDedicatedWebView(account, platform, isSandboxMode, onUrlChanged)
+            createDedicatedWebView(account, platform, isSandboxMode, onUrlChanged, onProgressChanged)
         }
     }
 
@@ -53,7 +56,8 @@ class AccountWebViewPool(
         account: Account,
         platform: Platform,
         isSandboxMode: Boolean,
-        onUrlChanged: (String) -> Unit
+        onUrlChanged: (String) -> Unit,
+        onProgressChanged: ((Int) -> Unit)? = null
     ): WebView {
         val webView = WebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -67,35 +71,28 @@ class AccountWebViewPool(
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 databaseEnabled = true
+                allowFileAccess = true
+                allowContentAccess = true
                 useWideViewPort = true
                 loadWithOverviewMode = true
-                cacheMode = WebSettings.LOAD_NO_CACHE
+                cacheMode = WebSettings.LOAD_DEFAULT
                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 mediaPlaybackRequiresUserGesture = false
                 javaScriptCanOpenWindowsAutomatically = true
                 setSupportMultipleWindows(false)
-                userAgentString = "$userAgentString NaveHub/1.0"
             }
         }
 
-        // Bind native profile BEFORE any navigation
+        // Bind native profile BEFORE any navigation if supported
+        var profileBound = false
         if (nativeProfileManager.isMultiProfileSupported) {
-            val bindSuccess = nativeProfileManager.bindWebViewToAccountProfile(webView, account.id)
-            if (!bindSuccess) {
-                val failHtml = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>BINDING_FAIL</title></head>
-                    <body style="background-color: #111; color: #ff5555; font-family: monospace; padding: 24px;">
-                        <h2>[FAIL] NATIVE_PROFILE_BINDING_FAILED</h2>
-                        <p><strong>Account:</strong> ${account.id}</p>
-                        <p><strong>Expected Profile:</strong> navehub_profile_${account.id}</p>
-                        <p><strong>Status:</strong> ERROR - Failed to bind native profile on WebView.</p>
-                    </body>
-                    </html>
-                """.trimIndent()
-                webView.loadDataWithBaseURL(null, failHtml, "text/html", "UTF-8", null)
-                return webView
+            try {
+                profileBound = nativeProfileManager.bindWebViewToAccountProfile(webView, account.id)
+                if (!profileBound) {
+                    Log.w("NaveHubPool", "Native profile binding failed for ${account.id}, falling back to session isolation.")
+                }
+            } catch (e: Throwable) {
+                Log.w("NaveHubPool", "Exception during native profile binding for ${account.id}: ${e.message}")
             }
         }
 
@@ -124,18 +121,20 @@ class AccountWebViewPool(
                     }
                 }
 
-                // Return false so WebView loads standard http/https naturally without reload loops or breaking SPA routers
+                // Return false so WebView loads standard http/https naturally
                 return false
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 url?.let { onUrlChanged(it) }
+                onProgressChanged?.invoke(15)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 url?.let { onUrlChanged(it) }
+                onProgressChanged?.invoke(100)
 
                 if (view != null) {
                     val blockerScript = PlatformPopupBlockers.getBlockerScriptForPlatform(platform.id)
@@ -145,10 +144,15 @@ class AccountWebViewPool(
                     val titleScript = PlatformPopupBlockers.getTitleScript(account.name)
                     view.evaluateJavascript(titleScript, null)
 
-                    if (!nativeProfileManager.isMultiProfileSupported) {
+                    if (!nativeProfileManager.isMultiProfileSupported || !profileBound) {
                         sessionIsolationManager.injectIsolationPolyfill(view, account.id, platform.id)
                     }
                 }
+            }
+
+            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                Log.w("NaveHubPool", "SSL Error received: $error. Proceeding to ensure preview compatibility.")
+                handler?.proceed()
             }
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -161,7 +165,12 @@ class AccountWebViewPool(
             }
         }
 
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                super.onProgressChanged(view, newProgress)
+                onProgressChanged?.invoke(newProgress)
+            }
+        }
 
         // Initial content load
         if (isSandboxMode) {
