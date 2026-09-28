@@ -78,11 +78,13 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
     suspend fun getAccountById(id: String): Account? =
         accountDao.getAccountById(id)?.toDomain()
 
-    suspend fun createAccount(platformId: String, customName: String? = null): Account {
+    suspend fun createAccount(platformId: String, customName: String? = null, customUrl: String? = null): Account {
         val existingCount = accountDao.getAccountCountForPlatform(platformId)
         val accountName = customName?.takeIf { it.isNotBlank() } ?: "Conta ${existingCount + 1}"
         val platform = getPlatformById(platformId)
-        val startUrl = platform?.defaultUrl ?: "https://8u.com"
+        val startUrl = customUrl?.takeIf { it.isNotBlank() }
+            ?.let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
+            ?: platform?.defaultUrl ?: "https://8u.com"
 
         val account = Account(
             id = UUID.randomUUID().toString(),
@@ -92,6 +94,12 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
         )
         accountDao.insertAccount(AccountEntity.fromDomain(account))
         return account
+    }
+
+    suspend fun updateAccountDetails(accountId: String, name: String, url: String) {
+        val formattedUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+        accountDao.updateAccountName(accountId, name)
+        accountDao.updateAccountUrl(accountId, formattedUrl)
     }
 
     suspend fun updateAccountUrl(accountId: String, url: String) {

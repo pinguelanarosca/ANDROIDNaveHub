@@ -43,10 +43,11 @@ import com.example.ui.theme.ErrorRed
 @Composable
 fun AddAccountDialog(
     platformName: String,
-    onConfirm: (String) -> Unit,
+    onConfirm: (name: String, url: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var accountName by remember { mutableStateOf("") }
+    var accountUrl by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -60,13 +61,12 @@ fun AddAccountDialog(
             )
         },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = "A nova conta terá ambiente de navegação, cookies e armazenamento 100% isolados das demais.",
                     fontSize = 12.sp,
                     color = Color(0xFF94A3B8)
                 )
-                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = accountName,
                     onValueChange = { accountName = it },
@@ -83,15 +83,109 @@ fun AddAccountDialog(
                         unfocusedBorderColor = CyberBorder
                     )
                 )
+                OutlinedTextField(
+                    value = accountUrl,
+                    onValueChange = { accountUrl = it },
+                    label = { Text("URL Inicial da Conta (Opcional)") },
+                    placeholder = { Text("Ex: https://8u.com") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_account_url_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color(0xFFCBD5E1),
+                        focusedBorderColor = CyanNeon,
+                        unfocusedBorderColor = CyberBorder
+                    )
+                )
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(accountName.trim()) },
+                onClick = { onConfirm(accountName.trim(), accountUrl.trim()) },
                 colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
                 modifier = Modifier.testTag("dialog_account_confirm_button")
             ) {
                 Text("Criar Conta", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancelar", color = Color(0xFF94A3B8))
+            }
+        }
+    )
+}
+
+@Composable
+fun EditAccountDialog(
+    account: Account,
+    onConfirm: (name: String, url: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var accountName by remember { mutableStateOf(account.name) }
+    var accountUrl by remember { mutableStateOf(account.currentUrl) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CyberSurface,
+        title = {
+            Text(
+                text = "Editar Conta e URL",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = accountName,
+                    onValueChange = { accountName = it },
+                    label = { Text("Nome da Conta") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_account_name_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color(0xFFCBD5E1),
+                        focusedBorderColor = CyanNeon,
+                        unfocusedBorderColor = CyberBorder
+                    )
+                )
+
+                OutlinedTextField(
+                    value = accountUrl,
+                    onValueChange = { accountUrl = it },
+                    label = { Text("URL Utilizada por esta Conta") },
+                    placeholder = { Text("https://exemplo.com") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_account_url_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color(0xFFCBD5E1),
+                        focusedBorderColor = CyanNeon,
+                        unfocusedBorderColor = CyberBorder
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (accountName.isNotBlank() && accountUrl.isNotBlank()) {
+                        onConfirm(accountName.trim(), accountUrl.trim())
+                    }
+                },
+                enabled = accountName.isNotBlank() && accountUrl.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
+                modifier = Modifier.testTag("dialog_edit_account_confirm_button")
+            ) {
+                Text("Atualizar URL e Salvar", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -108,52 +202,10 @@ fun RenameAccountDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var accountName by remember { mutableStateOf(account.name) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CyberSurface,
-        title = {
-            Text(
-                text = "Renomear Conta",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        },
-        text = {
-            OutlinedTextField(
-                value = accountName,
-                onValueChange = { accountName = it },
-                label = { Text("Novo Nome") },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("dialog_rename_input"),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color(0xFFCBD5E1),
-                    focusedBorderColor = CyanNeon,
-                    unfocusedBorderColor = CyberBorder
-                )
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (accountName.isNotBlank()) onConfirm(accountName.trim())
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
-                modifier = Modifier.testTag("dialog_rename_confirm_button")
-            ) {
-                Text("Salvar", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color(0xFF94A3B8))
-            }
-        }
+    EditAccountDialog(
+        account = account,
+        onConfirm = { name, _ -> onConfirm(name) },
+        onDismiss = onDismiss
     )
 }
 

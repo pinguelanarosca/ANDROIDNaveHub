@@ -47,11 +47,9 @@ fun AccountTabBar(
     selectedAccountId: String,
     onSelectAccount: (String) -> Unit,
     onAddAccountClick: () -> Unit,
-    onRenameAccountClick: (Account) -> Unit,
+    onEditAccountClick: (Account) -> Unit,
     onDeleteAccountClick: (Account) -> Unit,
     onOpenInspectorClick: () -> Unit,
-    isSandboxMode: Boolean,
-    onToggleSandboxMode: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accentColor = try {
@@ -109,7 +107,7 @@ fun AccountTabBar(
                         accentColor = accentColor,
                         canDelete = accounts.size > 1,
                         onClick = { onSelectAccount(account.id) },
-                        onRename = { onRenameAccountClick(account) },
+                        onEdit = { onEditAccountClick(account) },
                         onDelete = { onDeleteAccountClick(account) }
                     )
                 }
@@ -148,28 +146,6 @@ fun AccountTabBar(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Sandbox vs Live Web switcher
-            Box(
-                modifier = Modifier
-                    .height(34.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF131B2E))
-                    .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
-                    .clickable { onToggleSandboxMode(!isSandboxMode) }
-                    .padding(horizontal = 8.dp)
-                    .testTag("toggle_mode_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isSandboxMode) "Modo: Sandbox" else "Modo: Web",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSandboxMode) CyanNeon else Color(0xFFE2E8F0)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
             // Storage Inspector button
             IconButton(
                 onClick = onOpenInspectorClick,
@@ -195,7 +171,7 @@ private fun AccountTabItem(
     accentColor: Color,
     canDelete: Boolean,
     onClick: () -> Unit,
-    onRename: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val shape = RoundedCornerShape(8.dp)
@@ -227,17 +203,17 @@ private fun AccountTabItem(
             )
 
             if (isSelected) {
-                // Rename button
+                // Edit button
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clickable(onClick = onRename)
-                        .testTag("rename_account_${account.id}"),
+                        .clickable(onClick = onEdit)
+                        .testTag("edit_account_${account.id}"),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Renomear Conta",
+                        contentDescription = "Editar Conta e URL",
                         tint = Color(0xFF94A3B8),
                         modifier = Modifier.size(13.dp)
                     )

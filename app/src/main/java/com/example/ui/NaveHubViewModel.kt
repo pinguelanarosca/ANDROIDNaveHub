@@ -53,7 +53,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedAccountId = MutableStateFlow("")
     val selectedAccountId: StateFlow<String> = _selectedAccountId.asStateFlow()
 
-    private val _isSandboxMode = MutableStateFlow(true)
+    private val _isSandboxMode = MutableStateFlow(false)
     val isSandboxMode: StateFlow<Boolean> = _isSandboxMode.asStateFlow()
 
     private val _isAuditRunning = MutableStateFlow(false)
@@ -137,12 +137,23 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun createAccount(platformId: String, customName: String? = null) {
+    fun createAccount(platformId: String, customName: String? = null, customUrl: String? = null) {
         viewModelScope.launch {
-            val newAcc = repository.createAccount(platformId, customName)
+            val newAcc = repository.createAccount(platformId, customName, customUrl)
             _selectedAccountId.value = newAcc.id
             platformActiveAccountMap[platformId] = newAcc.id
             refreshActiveAccountData(newAcc.id)
+        }
+    }
+
+    fun updateAccountDetails(accountId: String, newName: String, newUrl: String) {
+        viewModelScope.launch {
+            repository.updateAccountDetails(accountId, newName, newUrl)
+            val webView = webViewPool.getWebView(accountId)
+            if (webView != null && newUrl.isNotBlank()) {
+                val formattedUrl = if (newUrl.startsWith("http://") || newUrl.startsWith("https://")) newUrl else "https://$newUrl"
+                webView.loadUrl(formattedUrl)
+            }
         }
     }
 

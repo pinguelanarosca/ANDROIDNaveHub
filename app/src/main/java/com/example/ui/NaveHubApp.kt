@@ -26,15 +26,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.key
 import com.example.domain.model.Account
 import com.example.ui.components.AccountTabBar
 import com.example.ui.components.AddAccountDialog
 import com.example.ui.components.AddPlatformDialog
 import com.example.ui.components.DeleteAccountDialog
+import com.example.ui.components.EditAccountDialog
 import com.example.ui.components.IsolationAuditDialog
 import com.example.ui.components.NaveWebViewContainer
 import com.example.ui.components.PlatformSidebar
-import com.example.ui.components.RenameAccountDialog
 import com.example.ui.components.StorageInspectorSheet
 import com.example.ui.theme.CyberBg
 import com.example.ui.theme.CyanNeon
@@ -77,7 +78,7 @@ fun NaveHubApp(
     // Dialog & Sheet States
     var showAddPlatformDialog by remember { mutableStateOf(false) }
     var showAddAccountDialog by remember { mutableStateOf(false) }
-    var accountToRename by remember { mutableStateOf<Account?>(null) }
+    var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
     var showAuditDialog by remember { mutableStateOf(false) }
     var showStorageInspector by remember { mutableStateOf(false) }
@@ -118,14 +119,12 @@ fun NaveHubApp(
                     selectedAccountId = selectedAccount?.id ?: "",
                     onSelectAccount = { id -> viewModel.selectAccount(id) },
                     onAddAccountClick = { showAddAccountDialog = true },
-                    onRenameAccountClick = { account -> accountToRename = account },
+                    onEditAccountClick = { account -> accountToEdit = account },
                     onDeleteAccountClick = { account -> accountToDelete = account },
                     onOpenInspectorClick = {
                         viewModel.refreshActiveAccountData()
                         showStorageInspector = true
-                    },
-                    isSandboxMode = isSandboxMode,
-                    onToggleSandboxMode = { viewModel.toggleSandboxMode(it) }
+                    }
                 )
 
                 // 3. CENTRAL REGION: Embedded WebView / Navigation Environment with Dedicated WebViews
@@ -140,7 +139,7 @@ fun NaveHubApp(
                             account = selectedAccount,
                             platform = selectedPlatform,
                             webViewPool = viewModel.webViewPool,
-                            isSandboxMode = isSandboxMode,
+                            isSandboxMode = false,
                             onUrlChange = { newUrl -> viewModel.updateAccountUrl(newUrl) },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -172,22 +171,26 @@ fun NaveHubApp(
     if (showAddAccountDialog) {
         AddAccountDialog(
             platformName = selectedPlatform?.name ?: "Plataforma",
-            onConfirm = { customName ->
-                viewModel.createAccount(selectedPlatformId, customName.takeIf { it.isNotBlank() })
+            onConfirm = { customName, customUrl ->
+                viewModel.createAccount(
+                    platformId = selectedPlatformId,
+                    customName = customName.takeIf { it.isNotBlank() },
+                    customUrl = customUrl.takeIf { it.isNotBlank() }
+                )
                 showAddAccountDialog = false
             },
             onDismiss = { showAddAccountDialog = false }
         )
     }
 
-    accountToRename?.let { account ->
-        RenameAccountDialog(
+    accountToEdit?.let { account ->
+        EditAccountDialog(
             account = account,
-            onConfirm = { newName ->
-                viewModel.renameAccount(account.id, newName)
-                accountToRename = null
+            onConfirm = { newName, newUrl ->
+                viewModel.updateAccountDetails(account.id, newName, newUrl)
+                accountToEdit = null
             },
-            onDismiss = { accountToRename = null }
+            onDismiss = { accountToEdit = null }
         )
     }
 
