@@ -75,6 +75,9 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
         list.map { it.toDomain() }
     }
 
+    suspend fun allAccountsSync(): List<Account> =
+        accountDao.getAllAccountsSync().map { it.toDomain() }
+
     suspend fun getAccountById(id: String): Account? =
         accountDao.getAccountById(id)?.toDomain()
 
@@ -172,5 +175,13 @@ class NaveHubRepository(private val database: NaveHubDatabase) {
 
     suspend fun clearStorage(accountId: String, storageType: StorageType) {
         sessionDao.clearStorageForAccount(accountId, storageType.name)
+    }
+
+    suspend fun overwriteAllData(platforms: List<Platform>, accounts: List<Account>) {
+        accountDao.deleteAllAccounts()
+        platformDao.deleteAllPlatforms()
+
+        platformDao.insertPlatforms(platforms.map { PlatformEntity.fromDomain(it) })
+        accountDao.insertAccounts(accounts.map { AccountEntity.fromDomain(it) })
     }
 }

@@ -17,14 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,9 +46,7 @@ fun AccountTabBar(
     selectedAccountId: String,
     onSelectAccount: (String) -> Unit,
     onAddAccountClick: () -> Unit,
-    onEditAccountClick: (Account) -> Unit,
-    onDeleteAccountClick: (Account) -> Unit,
-    onOpenInspectorClick: () -> Unit,
+    onOpenManagerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accentColor = try {
@@ -71,7 +68,7 @@ fun AccountTabBar(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Platform Pill
+            // Platform Pill & Manage/Edit All Accounts Button
             if (platform != null) {
                 Box(
                     modifier = Modifier
@@ -86,6 +83,21 @@ fun AccountTabBar(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
                         color = accentColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = onOpenManagerClick,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .testTag("open_accounts_manager_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Gerenciar e Editar Contas da Plataforma",
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -105,10 +117,7 @@ fun AccountTabBar(
                         account = account,
                         isSelected = isSelected,
                         accentColor = accentColor,
-                        canDelete = accounts.size > 1,
-                        onClick = { onSelectAccount(account.id) },
-                        onEdit = { onEditAccountClick(account) },
-                        onDelete = { onDeleteAccountClick(account) }
+                        onClick = { onSelectAccount(account.id) }
                     )
                 }
 
@@ -143,23 +152,6 @@ fun AccountTabBar(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // Storage Inspector button
-            IconButton(
-                onClick = onOpenInspectorClick,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag("open_storage_inspector_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Storage,
-                    contentDescription = "Inspecionar Sessão da Conta",
-                    tint = Color(0xFF94A3B8),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
     }
 }
@@ -169,10 +161,7 @@ private fun AccountTabItem(
     account: Account,
     isSelected: Boolean,
     accentColor: Color,
-    canDelete: Boolean,
-    onClick: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(8.dp)
     val bgColor = if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0xFF131B2E)
@@ -185,58 +174,27 @@ private fun AccountTabItem(
             .background(bgColor)
             .border(if (isSelected) 1.5.dp else 1.dp, borderColor, shape)
             .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = 4.dp)
+            .padding(horizontal = 12.dp)
             .testTag("account_tab_${account.id}"),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = account.name,
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (isSelected) {
-                // Edit button
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clickable(onClick = onEdit)
-                        .testTag("edit_account_${account.id}"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Editar Conta e URL",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-
-                // Delete button
-                if (canDelete) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable(onClick = onDelete)
-                            .testTag("delete_account_${account.id}"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remover Conta",
-                            tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-        }
+        Text(
+            text = account.name,
+            fontSize = 12.sp,
+            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+            color = if (isSelected) Color.White else Color(0xFF94A3B8),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
+}
+
+/**
+ * Removes leading numeric counters/identifiers such as "163440VIP1" -> "VIP1",
+ * "13444VIP8" -> "VIP8", "1 - Conta" -> "Conta", etc.
+ */
+internal fun formatAccountTabTitle(rawName: String): String {
+    val trimmed = rawName.trim()
+    val stripped = trimmed.replaceFirst(Regex("^\\d+[\\s._-]*"), "")
+    return if (stripped.isNotBlank()) stripped else trimmed
 }

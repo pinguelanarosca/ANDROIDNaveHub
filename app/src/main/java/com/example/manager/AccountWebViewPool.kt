@@ -1,6 +1,10 @@
 package com.example.manager
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -11,22 +15,24 @@ import android.webkit.WebViewClient
 import com.example.domain.model.Account
 import com.example.domain.model.Platform
 import com.example.domain.model.ProfileDiagnostics
-import com.example.ui.components.SandboxHtmlGenerator
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Manages dedicated WebView instances per account.
- * Ensures that each account maintains its own WebView instance
- * permanently bound to its own dedicated native AndroidX Profile.
- * Completely eliminates indiscriminate single-WebView reuse.
- */
 class AccountWebViewPool(
     private val context: Context,
     private val nativeProfileManager: NativeProfileManager,
     private val sessionIsolationManager: SessionIsolationManager
 ) {
-    // Map: accountId -> Dedicated WebView
+
     private val webViewMap = ConcurrentHashMap<String, WebView>()
+
+    init {
+        try {
+            val cacheBase = java.io.File(context.cacheDir, "WebView")
+            java.io.File(cacheBase, "Default/HTTP Cache/Code Cache/wasm").mkdirs()
+            java.io.File(cacheBase, "Default/HTTP Cache/Code Cache/js").mkdirs()
+        } catch (_: Throwable) {
+        }
+    }
 
     fun getOrCreateWebView(
         account: Account,
@@ -55,26 +61,27 @@ class AccountWebViewPool(
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
 
-            // Allow system automatic layer selection (hardware/software rendering as available)
             setLayerType(android.view.View.LAYER_TYPE_NONE, null)
 
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
+                databaseEnabled = true
                 useWideViewPort = true
                 loadWithOverviewMode = true
-                cacheMode = WebSettings.LOAD_DEFAULT
-                // BLOQUEIO 19: Revised mixed content - NEVER use ALWAYS_ALLOW
+                cacheMode = WebSettings.LOAD_NO_CACHE
                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                mediaPlaybackRequiresUserGesture = false
+                javaScriptCanOpenWindowsAutomatically = true
+                setSupportMultipleWindows(false)
                 userAgentString = "$userAgentString NaveHub/1.0"
             }
         }
 
-        // BLOQUEIO 1 & 2: Bind native profile BEFORE any page navigation or call!
+        // Bind native profile BEFORE any navigation
         if (nativeProfileManager.isMultiProfileSupported) {
             val bindSuccess = nativeProfileManager.bindWebViewToAccountProfile(webView, account.id)
             if (!bindSuccess) {
-                // REQUIREMENT 1: If binding fails, DO NOT load URL or sandbox content. Show explicit FAIL state.
                 val failHtml = """
                     <!DOCTYPE html>
                     <html>
@@ -83,8 +90,7 @@ class AccountWebViewPool(
                         <h2>[FAIL] NATIVE_PROFILE_BINDING_FAILED</h2>
                         <p><strong>Account:</strong> ${account.id}</p>
                         <p><strong>Expected Profile:</strong> navehub_profile_${account.id}</p>
-                        <p><strong>Status:</strong> ERROR - Failed to bind or validate native profile on WebView.</p>
-                        <p>Navigation and sandbox execution aborted to prevent Default profile data leak.</p>
+                        <p><strong>Status:</strong> ERROR - Failed to bind native profile on WebView.</p>
                     </body>
                     </html>
                 """.trimIndent()
@@ -93,8 +99,6 @@ class AccountWebViewPool(
             }
         }
 
-        // REQUIREMENT 18: Restrict NaveHubBridge strictly to Sandbox Mode where content is controlled by the app.
-        // For free web browsing (external URLs), NaveHubBridge is omitted to eliminate cross-origin iframe security risks.
         if (isSandboxMode) {
             webView.addJavascriptInterface(
                 sessionIsolationManager.createRestrictedBridge(account.id),
@@ -105,22 +109,54 @@ class AccountWebViewPool(
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
-                // Intercept navigation to prevent external window/intent leakage
-                if (url.startsWith("http://") || url.startsWith("https://")) {
-                    view?.loadUrl(url)
-                    onUrlChanged(url)
-                    return true
+
+                // If it is a custom/external scheme (tel, mailto, intent, whatsapp), open external intent
+                if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+                    return try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                        true
+                    } catch (e: Exception) {
+                        Log.w("NaveHubPool", "Cannot open custom scheme: $url", e)
+                        true // Suppress unhandled scheme crashes
+                    }
                 }
+
+                // Return false so WebView loads standard http/https naturally without reload loops or breaking SPA routers
                 return false
+            }
+
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                url?.let { onUrlChanged(it) }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 url?.let { onUrlChanged(it) }
 
-                // If native multi-profile is NOT supported, inject fallback polyfill
-                if (!nativeProfileManager.isMultiProfileSupported && view != null) {
-                    sessionIsolationManager.injectIsolationPolyfill(view, account.id, platform.id)
+                if (view != null) {
+                    val blockerScript = PlatformPopupBlockers.getBlockerScriptForPlatform(platform.id)
+                    if (blockerScript.isNotBlank()) {
+                        view.evaluateJavascript(blockerScript, null)
+                    }
+                    val titleScript = PlatformPopupBlockers.getTitleScript(account.name)
+                    view.evaluateJavascript(titleScript, null)
+
+                    if (!nativeProfileManager.isMultiProfileSupported) {
+                        sessionIsolationManager.injectIsolationPolyfill(view, account.id, platform.id)
+                    }
+                }
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    val errorCode = error?.errorCode ?: 0
+                    val description = error?.description?.toString() ?: "Network error"
+                    Log.w("NaveHubPool", "Network issue on main frame: code=$errorCode, desc=$description, url=${request.url}")
                 }
             }
         }
@@ -129,14 +165,19 @@ class AccountWebViewPool(
 
         // Initial content load
         if (isSandboxMode) {
-            val html = SandboxHtmlGenerator.generateHtml(
-                platform = platform,
-                account = account,
-                isNativeProfile = nativeProfileManager.isMultiProfileSupported,
-                profileName = nativeProfileManager.getProfileNameForAccount(account.id)
-            )
+            val html = """
+                <!DOCTYPE html>
+                <html>
+                <head><title>NaveHub Sandbox - ${account.name}</title></head>
+                <body style="background-color: #0b0f19; color: #00ffff; font-family: sans-serif; padding: 20px;">
+                    <h2>NaveHub Sandbox: ${platform.name}</h2>
+                    <p>Account: ${account.name} (${account.id})</p>
+                    <p>Status: Isolated Environment Active</p>
+                </body>
+                </html>
+            """.trimIndent()
             webView.loadDataWithBaseURL("https://${platform.id}.navehub.local/", html, "text/html", "UTF-8", null)
-        } else {
+        } else if (account.currentUrl.isNotBlank()) {
             webView.loadUrl(account.currentUrl)
         }
 
@@ -151,7 +192,7 @@ class AccountWebViewPool(
             wv.clearHistory()
             wv.destroy()
         } catch (e: Throwable) {
-            // Ignore destruction errors
+            Log.e("NaveHubPool", "Error destroying webview for $accountId", e)
         }
     }
 

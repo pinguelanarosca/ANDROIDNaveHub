@@ -1,11 +1,13 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.NaveHubDatabase
 import com.example.data.repository.NaveHubRepository
 import com.example.domain.model.Account
+import com.example.domain.model.BackupPayload
 import com.example.domain.model.CookieItem
 import com.example.domain.model.IsolationAuditReport
 import com.example.domain.model.Platform
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NaveHubViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -46,6 +49,8 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         nativeProfileManager,
         isolationManager
     )
+
+    private val prefs = application.getSharedPreferences("navehub_platform_state", Context.MODE_PRIVATE)
 
     private val _selectedPlatformId = MutableStateFlow("8u")
     val selectedPlatformId: StateFlow<String> = _selectedPlatformId.asStateFlow()
@@ -74,8 +79,6 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     private val _profileDiagnostics = MutableStateFlow<ProfileDiagnostics?>(null)
     val profileDiagnostics: StateFlow<ProfileDiagnostics?> = _profileDiagnostics.asStateFlow()
 
-    private val platformActiveAccountMap = mutableMapOf<String, String>()
-
     val platforms: StateFlow<List<Platform>> = repository.allPlatforms
         .stateIn(
             scope = viewModelScope,
@@ -96,52 +99,81 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
 
             val initialPlatforms = repository.getPlatformsSync()
             if (initialPlatforms.isNotEmpty()) {
-                val initialPlatId = initialPlatforms.first().id
-                _selectedPlatformId.value = initialPlatId
-                val accounts = repository.getAccountsForPlatformSync(initialPlatId)
+                val lastSelectedPlatform = prefs.getString("last_platform_id", initialPlatforms.first().id)
+                    ?: initialPlatforms.first().id
+                val validPlatId = if (initialPlatforms.any { it.id == lastSelectedPlatform }) {
+                    lastSelectedPlatform
+                } else {
+                    initialPlatforms.first().id
+                }
+
+                _selectedPlatformId.value = validPlatId
+
+                val accounts = repository.getAccountsForPlatformSync(validPlatId)
+                    .sortedWith(compareByDescending<Account> { getVipLevel(it.name) }.thenBy { it.name })
+
                 if (accounts.isNotEmpty()) {
-                    val firstAccId = accounts.first().id
-                    _selectedAccountId.value = firstAccId
-                    platformActiveAccountMap[initialPlatId] = firstAccId
-                    refreshActiveAccountData(firstAccId)
+                    val rememberedAccId = prefs.getString("last_account_$validPlatId", null)
+                    val targetAcc = accounts.find { it.id == rememberedAccId } ?: accounts.first()
+                    _selectedAccountId.value = targetAcc.id
+                    refreshActiveAccountData(targetAcc.id)
                 }
             }
         }
     }
 
-    fun selectPlatform(platformId: String) {
-        viewModelScope.launch {
-            _selectedPlatformId.value = platformId
-            val accounts = repository.getAccountsForPlatformSync(platformId)
-            val rememberedAccountId = platformActiveAccountMap[platformId]
-            val targetAccount = accounts.find { it.id == rememberedAccountId } ?: accounts.firstOrNull()
+    fun getVipLevel(name: String): Int {
+        val match = Regex("VIP(\\d+)", RegexOption.IGNORE_CASE).find(name)
+        return match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    }
 
-            if (targetAccount != null) {
-                _selectedAccountId.value = targetAccount.id
-                platformActiveAccountMap[platformId] = targetAccount.id
-                refreshActiveAccountData(targetAccount.id)
-            } else if (accounts.isEmpty()) {
-                val newAcc = repository.createAccount(platformId, "Conta 1")
+    fun selectPlatform(platformId: String) {
+        _selectedPlatformId.value = platformId
+        prefs.edit().putString("last_platform_id", platformId).apply()
+
+        val platformAccounts = allAccounts.value
+            .filter { it.platformId == platformId }
+            .sortedWith(compareByDescending<Account> { getVipLevel(it.name) }.thenBy { it.name })
+
+        val rememberedAccId = prefs.getString("last_account_$platformId", null)
+        val immediateTarget = platformAccounts.find { it.id == rememberedAccId } ?: platformAccounts.firstOrNull()
+
+        if (immediateTarget != null) {
+            _selectedAccountId.value = immediateTarget.id
+            refreshActiveAccountData(immediateTarget.id)
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val dbAccounts = repository.getAccountsForPlatformSync(platformId)
+                .sortedWith(compareByDescending<Account> { getVipLevel(it.name) }.thenBy { it.name })
+
+            if (dbAccounts.isNotEmpty()) {
+                val dbTarget = dbAccounts.find { it.id == rememberedAccId } ?: dbAccounts.first()
+                if (_selectedAccountId.value != dbTarget.id && immediateTarget == null) {
+                    _selectedAccountId.value = dbTarget.id
+                    prefs.edit().putString("last_account_$platformId", dbTarget.id).apply()
+                    refreshActiveAccountData(dbTarget.id)
+                }
+            } else {
+                val newAcc = repository.createAccount(platformId, "VIP1")
                 _selectedAccountId.value = newAcc.id
-                platformActiveAccountMap[platformId] = newAcc.id
+                prefs.edit().putString("last_account_$platformId", newAcc.id).apply()
                 refreshActiveAccountData(newAcc.id)
             }
         }
     }
 
     fun selectAccount(accountId: String) {
-        viewModelScope.launch {
-            _selectedAccountId.value = accountId
-            platformActiveAccountMap[_selectedPlatformId.value] = accountId
-            refreshActiveAccountData(accountId)
-        }
+        _selectedAccountId.value = accountId
+        prefs.edit().putString("last_account_${_selectedPlatformId.value}", accountId).apply()
+        refreshActiveAccountData(accountId)
     }
 
     fun createAccount(platformId: String, customName: String? = null, customUrl: String? = null) {
         viewModelScope.launch {
             val newAcc = repository.createAccount(platformId, customName, customUrl)
             _selectedAccountId.value = newAcc.id
-            platformActiveAccountMap[platformId] = newAcc.id
+            prefs.edit().putString("last_account_$platformId", newAcc.id).apply()
             refreshActiveAccountData(newAcc.id)
         }
     }
@@ -151,7 +183,11 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
             repository.updateAccountDetails(accountId, newName, newUrl)
             val webView = webViewPool.getWebView(accountId)
             if (webView != null && newUrl.isNotBlank()) {
-                val formattedUrl = if (newUrl.startsWith("http://") || newUrl.startsWith("https://")) newUrl else "https://$newUrl"
+                val formattedUrl = if (newUrl.startsWith("http://", ignoreCase = true) || newUrl.startsWith("https://", ignoreCase = true)) {
+                    newUrl
+                } else {
+                    "https://$newUrl"
+                }
                 webView.loadUrl(formattedUrl)
             }
         }
@@ -171,15 +207,17 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
             repository.deleteAccount(accountId)
 
             val remaining = repository.getAccountsForPlatformSync(currentPlatId)
+                .sortedWith(compareByDescending<Account> { getVipLevel(it.name) }.thenBy { it.name })
+
             if (remaining.isNotEmpty()) {
                 val nextAccount = remaining.first()
                 _selectedAccountId.value = nextAccount.id
-                platformActiveAccountMap[currentPlatId] = nextAccount.id
+                prefs.edit().putString("last_account_$currentPlatId", nextAccount.id).apply()
                 refreshActiveAccountData(nextAccount.id)
             } else {
-                val newAcc = repository.createAccount(currentPlatId, "Conta 1")
+                val newAcc = repository.createAccount(currentPlatId, "VIP1")
                 _selectedAccountId.value = newAcc.id
-                platformActiveAccountMap[currentPlatId] = newAcc.id
+                prefs.edit().putString("last_account_$currentPlatId", newAcc.id).apply()
                 refreshActiveAccountData(newAcc.id)
             }
         }
@@ -199,7 +237,7 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
     fun updateAccountUrl(url: String) {
         val accId = _selectedAccountId.value
         if (accId.isNotBlank()) {
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO) {
                 repository.updateAccountUrl(accId, url)
             }
         }
@@ -215,43 +253,62 @@ class NaveHubViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setStorageItem(type: StorageType, key: String, value: String) {
-        val accId = _selectedAccountId.value
-        if (accId.isBlank()) return
-        viewModelScope.launch {
-            repository.setStorageItem(accId, type, key, value)
-            refreshActiveAccountData(accId)
-        }
+    // --- Backup & Restore Features ---
+
+    suspend fun generateBackupJson(): String = withContext(Dispatchers.IO) {
+        val currentPlatforms = repository.getPlatformsSync()
+        val currentAccounts = repository.allAccountsSync()
+
+        val allPrefs = prefs.all.mapValues { it.value.toString() }
+
+        val payload = BackupPayload(
+            platforms = currentPlatforms,
+            accounts = currentAccounts,
+            preferences = allPrefs
+        )
+        payload.toJsonString()
     }
 
-    fun deleteStorageItem(type: StorageType, key: String) {
-        val accId = _selectedAccountId.value
-        if (accId.isBlank()) return
-        viewModelScope.launch {
-            repository.deleteStorageItem(accId, type, key)
-            refreshActiveAccountData(accId)
-        }
-    }
+    suspend fun restoreFromBackup(jsonString: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val payload = BackupPayload.fromJsonString(jsonString)
 
-    fun clearStorage(type: StorageType) {
-        val accId = _selectedAccountId.value
-        if (accId.isBlank()) return
-        viewModelScope.launch {
-            repository.clearStorage(accId, type)
-            refreshActiveAccountData(accId)
-        }
-    }
-
-    fun runIsolationAudit() {
-        if (_isAuditRunning.value) return
-        viewModelScope.launch {
-            _isAuditRunning.value = true
-            try {
-                val report = auditor.runFullAudit()
-                _auditReport.value = report
-            } finally {
-                _isAuditRunning.value = false
+            if (payload.platforms.isEmpty() || payload.accounts.isEmpty()) {
+                return@withContext Result.failure(IllegalArgumentException("O arquivo de backup está vazio ou é inválido."))
             }
+
+            // Release all active webviews
+            withContext(Dispatchers.Main) {
+                webViewPool.releaseAll()
+            }
+
+            // Clean and overwrite database completely
+            repository.overwriteAllData(payload.platforms, payload.accounts)
+
+            // Overwrite preferences
+            val editor = prefs.edit().clear()
+            payload.preferences.forEach { (k, v) ->
+                editor.putString(k, v)
+            }
+            editor.apply()
+
+            // Re-select first platform and account
+            val firstPlatform = payload.platforms.first()
+            val firstAccounts = payload.accounts
+                .filter { it.platformId == firstPlatform.id }
+                .sortedWith(compareByDescending<Account> { getVipLevel(it.name) }.thenBy { it.name })
+
+            val targetAccount = firstAccounts.firstOrNull() ?: payload.accounts.first()
+
+            withContext(Dispatchers.Main) {
+                _selectedPlatformId.value = firstPlatform.id
+                _selectedAccountId.value = targetAccount.id
+                refreshActiveAccountData(targetAccount.id)
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

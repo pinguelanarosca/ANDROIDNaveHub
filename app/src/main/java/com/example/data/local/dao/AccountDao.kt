@@ -28,6 +28,9 @@ interface AccountDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: AccountEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAccounts(accounts: List<AccountEntity>)
+
     @Update
     suspend fun updateAccount(account: AccountEntity)
 
@@ -39,6 +42,12 @@ interface AccountDao {
 
     @Query("DELETE FROM accounts WHERE id = :id")
     suspend fun deleteAccountById(id: String)
+
+    @Query("DELETE FROM accounts WHERE platformId = :platformId")
+    suspend fun deleteAccountsForPlatform(platformId: String)
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAllAccounts()
 
     @Query("SELECT COUNT(*) FROM accounts WHERE platformId = :platformId")
     suspend fun getAccountCountForPlatform(platformId: String): Int

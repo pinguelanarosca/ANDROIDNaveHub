@@ -14,16 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +47,8 @@ fun PlatformSidebar(
     accountCounts: Map<String, Int>,
     onSelectPlatform: (String) -> Unit,
     onAddPlatformClick: () -> Unit,
-    onOpenAuditClick: () -> Unit,
+    onBackupClick: () -> Unit,
+    onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -83,7 +82,7 @@ fun PlatformSidebar(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Scrollable platform list
             Column(
@@ -131,22 +130,53 @@ fun PlatformSidebar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Audit & Info actions at bottom
-            IconButton(
-                onClick = onOpenAuditClick,
-                modifier = Modifier
-                    .size(48.dp)
-                    .testTag("open_isolation_audit_button")
+            // Bottom-Left Actions: Backup & Restore Buttons
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = "Auditoria de Isolamento",
-                    tint = CyanNeon,
-                    modifier = Modifier.size(24.dp)
-                )
+                // Backup Button
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0F172A))
+                        .border(1.dp, CyanNeon.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clickable(onClick = onBackupClick)
+                        .testTag("sidebar_backup_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = "Fazer Backup Completo",
+                        tint = CyanNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Restore Button
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0F172A))
+                        .border(1.dp, Color(0xFFFFB300).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clickable(onClick = onRestoreClick)
+                        .testTag("sidebar_restore_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SettingsBackupRestore,
+                        contentDescription = "Restaurar Backup (Sobrescrever)",
+                        tint = Color(0xFFFFB300),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }
@@ -176,7 +206,9 @@ private fun PlatformItem(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp)
         ) {
             Text(
                 text = platform.name,
@@ -188,7 +220,7 @@ private fun PlatformItem(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Account count pill
+            // Account count badge
             if (accountCount > 0) {
                 Text(
                     text = "$accountCount",
