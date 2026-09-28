@@ -91,6 +91,9 @@ fun PlatformSidebar(
                 shape = androidx.compose.ui.graphics.RectangleShape
             )
     ) {
+        // Floating translucent particles and subtle ambient texture
+        AmbientSidebarBackground(modifier = Modifier.fillMaxSize())
+
         Column(
             modifier = Modifier
                 .fillMaxHeight()
